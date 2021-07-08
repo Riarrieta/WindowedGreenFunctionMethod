@@ -1,0 +1,17 @@
+Do not edit:    !line! variable                   ! type     ! Allowed values  
+Do not edit:    ----------------------------------------------------------------------------
+1		! 1  ! key                        ! I4       ! 0,1,2    
+-7		! 2  ! nord                       ! I4       ! [-7,7]
+D		! 3  ! output_prec                ! CHAR4    ! S,s,D,d
+LIN		! 4  ! lambda_scale               ! CHAR4    ! LIN,lin,LOG,log
+400.,400.,1	! 5  ! lambda_min, lambda_max, nl ! R8,R8,I4 ! 0<=lambda_min<=lambda_max; nl>1
+40.,40.,40.	! 6  ! z1, z2, rho                ! R8,R8,I4 ! z1,z2,rh0>0
+2.5,0.01        ! 7  ! eps_2_r, eps_2_i           ! R8,R8    ! eps_1_r arbitrary; eps_2_i>=0
+136.1		! 8  ! lambda_p                   ! R8       ! lambda_p>=0
+0.0019		! 9  ! gd                         ! R8       ! gd>=0
+5.0		! 10 ! eps0                       ! R8       ! Arbitrary real
+1.0		! 11 ! eps_1                      ! R8       ! eps_1>0
+10000		! 12 ! N1                         ! I8       ! >=10 [converted to even]
+10000		! 13 ! N2                         ! I8       ! >=10 [converted to even]
+10000		! 14 ! N3                         ! I8       ! >=10 [converted to even]
+1.0d4,10.0	! 15 ! y_max, div                 ! R8,R8    ! y_max,div>0

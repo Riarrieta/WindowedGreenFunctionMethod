@@ -1,0 +1,5649 @@
+*DECK XDLEGF
+      SUBROUTINE XDLEGF(DNU1,NUDIFF,MU1,MU2,THETA,ID,PQA,IPQA)
+C***BEGIN PROLOGUE   XDLEGF
+C***DATE WRITTEN   820728   (YYMMDD)
+C***REVISION DATE  871020   (YYMMDD)
+C***CATEGORY NO.  C3a2,C9
+C***KEYWORDS  LEGENDRE FUNCTIONS
+C***AUTHOR  SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO COMPUTE THE VALUES OF LEGENDRE FUNCTIONS
+C***DESCRIPTION
+C
+C   XDLEGF: Extended-range Double-precision Legendre Functions
+C
+C   A feature of the XDLEGF subroutine for Legendre functions is
+C the use of extended-range arithmetic, a software extension of
+C ordinary floating-point arithmetic that greatly increases the
+C exponent range of the representable numbers. This avoids the
+C need for scaling the solutions to lie within the exponent range
+C of the most restrictive manufacturer's hardware. The increased
+C exponent range is achieved by allocating an integer storage
+C location together with each floating-point storage location.
+C
+C   The interpretation of the pair (X,I) where X is floating-point
+C and I is integer is X*(IR**I) where IR is the internal radix of
+C the computer arithmetic.
+C
+C   This subroutine computes one of the following vectors:
+C
+C 1. Legendre function of the first kind of negative order, either
+C    a. P(-MU1,NU,X), P(-MU1-1,NU,X), ..., P(-MU2,NU,X) or
+C    b. P(-MU,NU1,X), P(-MU,NU1+1,X), ..., P(-MU,NU2,X)
+C 2. Legendre function of the second kind, either
+C    a. Q(MU1,NU,X), Q(MU1+1,NU,X), ..., Q(MU2,NU,X) or
+C    b. Q(MU,NU1,X), Q(MU,NU1+1,X), ..., Q(MU,NU2,X)
+C 3. Legendre function of the first kind of positive order, either
+C    a. P(MU1,NU,X), P(MU1+1,NU,X), ..., P(MU2,NU,X) or
+C    b. P(MU,NU1,X), P(MU,NU1+1,X), ..., P(MU,NU2,X)
+C 4. Normalized Legendre polynomials, either
+C    a. PN(MU1,NU,X), PN(MU1+1,NU,X), ..., PN(MU2,NU,X) or
+C    b. PN(MU,NU1,X), PN(MU,NU1+1,X), ..., PN(MU,NU2,X)
+C
+C where X = COS(THETA).
+C
+C   The input values to XDLEGF are DNU1, NUDIFF, MU1, MU2, THETA,
+C and ID. These must satisfy
+C
+C    DNU1 is DOUBLE PRECISION and greater than or equal to -0.5;
+C    NUDIFF is INTEGER and non-negative;
+C    MU1 is INTEGER and non-negative;
+C    MU2 is INTEGER and greater than or equal to MU1;
+C    THETA is DOUBLE PRECISION and in the half-open interval (0,PI/2];
+C    ID is INTEGER and equal to 1, 2, 3 or 4;
+C
+C and  additionally either NUDIFF = 0 or MU2 = MU1.
+C
+C   If ID=1 and NUDIFF=0, a vector of type 1a above is computed
+C with NU=DNU1.
+C
+C   If ID=1 and MU1=MU2, a vector of type 1b above is computed
+C with NU1=DNU1, NU2=DNU1+NUDIFF and MU=MU1.
+C
+C   If ID=2 and NUDIFF=0, a vector of type 2a above is computed
+C with NU=DNU1.
+C
+C   If ID=2 and MU1=MU2, a vector of type 2b above is computed
+C with NU1=DNU1, NU2=DNU1+NUDIFF and MU=MU1.
+C
+C   If ID=3 and NUDIFF=0, a vector of type 3a above is computed
+C with NU=DNU1.
+C
+C   If ID=3 and MU1=MU2, a vector of type 3b above is computed
+C with NU1=DNU1, NU2=DNU1+NUDIFF and MU=MU1.
+C
+C   If ID=4 and NUDIFF=0, a vector of type 4a above is computed
+C with NU=DNU1.
+C
+C   If ID=4 and MU1=MU2, a vector of type 4b above is computed
+C with NU1=DNU1, NU2=DNU1+NUDIFF and MU=MU1.
+C
+C   In each case the vector of computed Legendre function values
+C is returned in the extended-range vector (PQA(I),IPQA(I)). The
+C length of this vector is either MU2-MU1+1 or NUDIFF+1.
+C
+C Where possible, XDLEGF returns IPQA(I) as zero. In this case the
+C value of the Legendre function is contained entirely in PQA(I),
+C so it can be used in subsequent computations without further
+C consideration of extended-range arithmetic. If IPQA(I) is nonzero,
+C then the value of the Legendre function is not representable in
+C floating-point because of underflow or overflow. The program that
+C calls XDLEGF must test IPQA(I) to ensure correct usage.
+C
+C***REFERENCES  OLVER AND SMITH,J.COMPUT.PHYSICS,51(1983),N0.3,502-518.
+C***ROUTINES CALLED  XERROR, XDPMU, XDPMUP, XDPNRM, XDPQNU, XDQMU, XDQNU,
+C                    XDRED, XDSET
+C***END PROLOGUE  XDLEGF
+      DOUBLE PRECISION PQA,DNU1,DNU2,SX,THETA,X,PI2
+      DIMENSION PQA(*),IPQA(*)
+C
+C***FIRST EXECUTABLE STATEMENT   XDLEGF
+      CALL XDSET (0, 0, 0.0D0, 0)
+      PI2=2.D0*DATAN(1.D0)
+C
+C        ZERO OUTPUT ARRAYS
+C
+      L=(MU2-MU1)+NUDIFF+1
+      DO 290 I=1,L
+      PQA(I)=0.
+  290 IPQA(I)=0
+C
+C        CHECK FOR VALID INPUT VALUES
+C
+      IF(NUDIFF.LT.0) GO TO 400
+      IF(DNU1.LT.-.5D0) GO TO 400
+      IF(MU2.LT.MU1) GO TO 400
+      IF(MU1.LT.0) GO TO 400
+      IF(THETA.LE.0.D0.OR.THETA.GT.PI2) GO TO 420
+      IF(ID.LT.1.OR.ID.GT.4) GO TO 400
+      IF((MU1.NE.MU2).AND.(NUDIFF.GT.0)) GO TO 400
+C
+C        IF DNU1 IS NOT AN INTEGER, NORMALIZED P(MU,DNU,X)
+C        CANNOT BE CALCULATED.  IF DNU1 IS AN INTEGER AND
+C        MU1.GT.DNU2 THEN ALL VALUES OF P(+MU,DNU,X) AND
+C        NORMALIZED P(MU,NU,X) WILL BE ZERO.
+C
+      DNU2=DNU1+NUDIFF
+      IF((ID.EQ.3).AND.(DMOD(DNU1,1.D0).NE.0.)) GO TO 295
+      IF((ID.EQ.4).AND.(DMOD(DNU1,1.D0).NE.0.)) GO TO 400
+      IF((ID.EQ.3.OR.ID.EQ.4).AND.DBLE(FLOAT(MU1)).GT.DNU2) RETURN
+  295 CONTINUE
+C
+      X=DCOS(THETA)
+      SX=1.D0/DSIN(THETA)
+      IF(ID.EQ.2) GO TO 300
+      IF(MU2-MU1.LE.0) GO TO 360
+C
+C        FIXED NU, VARIABLE MU
+C        CALL XDPMU TO CALCULATE P(-MU1,NU,X),....,P(-MU2,NU,X)
+C
+      CALL XDPMU(DNU1,DNU2,MU1,MU2,THETA,X,SX,ID,PQA,IPQA)
+      GO TO 380
+C
+  300 IF(MU2.EQ.MU1) GO TO 320
+C
+C        FIXED NU, VARIABLE MU
+C        CALL XDQMU TO CALCULATE Q(MU1,NU,X),....,Q(MU2,NU,X)
+C
+      CALL XDQMU(DNU1,DNU2,MU1,MU2,THETA,X,SX,ID,PQA,IPQA)
+      GO TO 390
+C
+C        FIXED MU, VARIABLE NU
+C        CALL XDQNU TO CALCULATE Q(MU,DNU1,X),....,Q(MU,DNU2,X)
+C
+  320 CALL XDQNU(DNU1,DNU2,MU1,THETA,X,SX,ID,PQA,IPQA)
+      GO TO 390
+C
+C        FIXED MU, VARIABLE NU
+C        CALL XDPQNU TO CALCULATE P(-MU,DNU1,X),....,P(-MU,DNU2,X)
+C
+  360 CALL XDPQNU(DNU1,DNU2,MU1,THETA,ID,PQA,IPQA)
+C
+C        IF ID = 3, TRANSFORM P(-MU,NU,X) VECTOR INTO
+C        P(MU,NU,X) VECTOR.
+C
+  380 IF(ID.EQ.3) CALL XDPMUP(DNU1,DNU2,MU1,MU2,PQA,IPQA)
+C
+C        IF ID = 4, TRANSFORM P(-MU,NU,X) VECTOR INTO
+C        NORMALIZED P(MU,NU,X) VECTOR.
+C
+      IF(ID.EQ.4) CALL XDPNRM(DNU1,DNU2,MU1,MU2,PQA,IPQA)
+C
+C        PLACE RESULTS IN REDUCED FORM IF POSSIBLE
+C        AND RETURN TO MAIN PROGRAM.
+C
+  390 DO 395 I=1,L
+      CALL XDRED(PQA(I),IPQA(I))
+  395 CONTINUE
+      RETURN
+C
+C        *****     ERROR TERMINATION     *****
+C
+  400 CALL XERROR('XDLEGF: DNU1,NUDIFF,MU1,MU2, or ID not valid',44,1,1)
+      GO TO 430
+  420 CALL XERROR('XDLEGF: THETA out of range',26,2,1)
+  430 RETURN
+      END
+*DECK XDCSRT
+      SUBROUTINE XDCSRT(DNU1,NUDIFF,MU1,MU2,THETA,P,Q,R,IP,IQ,IR,C1,IC1
+     1   ,C2,IC2)
+C***BEGIN PROLOGUE   XDCSRT
+C***DATE WRITTEN   820728   (YYMMDD)
+C***REVISION DATE  850805   (YYMMDD)
+C***CATEGORY NO.  C3a2,C9
+C***KEYWORDS  LEGENDRE FUNCTIONS
+C***AUTHOR  SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO COMPUTE CHECK VALUES FOR LEGENDRE FUNCTIONS
+C***DESCRIPTION
+C
+C        SUBROUTINE XDCSRT CALCULATES CASORATI (CROSS PRODUCT)
+C        CHECK VALUES AND STORES THEM IN ARRAYS C1 AND C2 WITH
+C        EXPONENTS IN ARRAYS IC1 AND IC2.  CALCULATIONS ARE BASED
+C        ON PREVIOUSLY CALCULATED LEGENDRE FUNCTIONS OF THE
+C        FIRST KIND (NEGATIVE ORDER) IN ARRAY P, THE SECOND KIND
+C        IN ARRAY Q, THE FIRST KIND (POSITIVE ORDER) IN ARRAY R.
+C        RESULTS SHOULD BE 1.0 TO WITHIN ROUNDOFF ERROR.
+C
+C***REFERENCES  OLVER AND SMITH,J.COMPUT.PHYSICS,51(1983),N0.3,502-518.
+C***ROUTINES CALLED  XDADD, XDADJ, XDRED
+C***END PROLOGUE  XDCSRT
+      DOUBLE PRECISION C1,C2,DMU,DMU1,NU,DNU1,DNU2,P,Q,R,THETA,SX,X1,X2
+      DIMENSION P(*),IP(*),Q(*),IQ(*),R(*),IR(*)
+      DIMENSION C1(*),IC1(*),C2(*),IC2(*)
+C
+C         PLACE ALL INPUT IN ADJUSTED FORM.
+C
+C***FIRST EXECUTABLE STATEMENT   XDCSRT
+      L=NUDIFF+(MU2-MU1)+1
+      LM1=L-1
+      DNU2=DNU1+NUDIFF
+      DO 500 I=1,L
+      CALL XDADJ(P(I),IP(I))
+      CALL XDADJ(Q(I),IQ(I))
+      CALL XDADJ(R(I),IR(I))
+  500 CONTINUE
+C
+C         CHECKS FOR FIXED MU, VARIABLE NU
+C
+      IF(MU2.GT.MU1) GO TO 700
+      DMU1=DBLE(FLOAT(MU1))
+      DO 650 I=1,LM1
+      C1(I)=0.
+      C2(I)=0.
+      NU=DNU1+DBLE(FLOAT(I))-1.D0
+C
+C         CASORATI 2
+C
+C         (MU+NU+1)*P(-MU,NU+1,X)*Q(MU,NU,X)
+C               +(MU-NU-1)*P(-MU,NU,X)*Q(MU,NU+1,X)=COS(MU*PI)
+C
+      X1=P(I+1)*Q(I)
+      IX1=IP(I+1)+IQ(I)
+      CALL XDADJ(X1,IX1)
+      X2=P(I)*Q(I+1)
+      IX2=IP(I)+IQ(I+1)
+      CALL XDADJ(X2,IX2)
+      X1=(DMU1+NU+1.D0)*X1
+      X2=(DMU1-NU-1.D0)*X2
+      CALL XDADD(X1,IX1,X2,IX2,C1(I),IC1(I))
+      CALL XDADJ(C1(I),IC1(I))
+C
+C         MULTIPLY BY (-1)**MU SO THAT CHECK VALUE IS 1.
+C
+      C1(I)=C1(I)*DBLE(FLOAT((-1)**MU1))
+C
+C         CASORATI 1
+C
+C         P(MU,NU+1,X)*Q(MU,NU,X)-P(MU,NU,X)*Q(MU,NU+1,X)=
+C               GAMMA(NU+MU+1)/GAMMA(NU-MU+2)
+C
+      IF(DMU1.GE.NU+1.D0.AND.DMOD(NU,1.D0).EQ.0.) GO TO 630
+      X1=R(I+1)*Q(I)
+      IX1=IR(I+1)+IQ(I)
+      CALL XDADJ(X1,IX1)
+      X2=R(I)*Q(I+1)
+      IX2=IR(I)+IQ(I+1)
+      CALL XDADJ(X2,IX2)
+      CALL XDADD(X1,IX1,-X2,IX2,C2(I),IC2(I))
+C
+C         DIVIDE BY (NU+MU),(NU+MU-1),(NU+MU-2),....(NU-MU+2),
+C         SO THAT CHECK VALUE IS 1.
+C
+      K=2*MU1-1
+      DO 620 J=1,K
+      IF(K.LE.0) GO TO 620
+      C2(I)=C2(I)/(NU+DMU1+1.D0-DBLE(FLOAT(J)))
+  620 CALL XDADJ(C2(I),IC2(I))
+      IF(K.LE.0) C2(I)=(NU+1.D0)*C2(I)
+      GO TO 650
+  630 C2(I)=0.
+      IC2(I)=0
+  650 CONTINUE
+      GO TO 800
+C
+C         CHECKS FOR FIXED NU, VARIABLE MU
+C
+  700 CONTINUE
+      SX=DSIN(THETA)
+      DO 750 I=1,LM1
+      C1(I)=0.
+      C2(I)=0.
+C
+C         CASORATI 4
+C
+C         (MU+NU+1)*(MU-NU)*P(-(MU+1),NU,X)*Q(MU,NU,X)
+C              -P(-MU,NU,X)*Q(MU+1,NU,X)=COS(MU*PI)/SQRT(1-X**2)
+C
+      MU=MU1+I-1
+      DMU=DBLE(FLOAT(MU))
+      X1=P(I+1)*Q(I)
+      IX1=IP(I+1)+IQ(I)
+      CALL XDADJ(X1,IX1)
+      X2=P(I)*Q(I+1)
+      IX2=IP(I)+IQ(I+1)
+      CALL XDADJ(X2,IX2)
+      X1=(DMU+DNU1+1.D0)*(DMU-DNU1)*X1
+C
+C         MULTIPLY BY SQRT(1-X**2)*(-1)**MU SO THAT CHECK VALUE IS 1.
+C
+      CALL XDADD(X1,IX1,-X2,IX2,C1(I),IC1(I))
+      C1(I)=SX*C1(I)*DBLE(FLOAT((-1)**MU))
+      CALL XDADJ(C1(I),IC1(I))
+C
+C         CASORATI 3
+C
+C         P(MU+1,NU,X)*Q(MU,NU,X)-P(MU,NU,X)*Q(MU+1,NU,X)=
+C               GAMMA(NU+MU+1)/(GAMMA(NU-MU+1)*SQRT(1-X**2))
+C
+      IF(DMU.GE.DNU1+1.D0.AND.DMOD(DNU1,1.D0).EQ.0.) GO TO 750
+      X1=R(I+1)*Q(I)
+      IX1=IR(I+1)+IQ(I)
+      CALL XDADJ(X1,IX1)
+      X2=R(I)*Q(I+1)
+      IX2=IR(I)+IQ(I+1)
+      CALL XDADJ(X2,IX2)
+      CALL XDADD(X1,IX1,-X2,IX2,C2(I),IC2(I))
+C
+C         MULTIPLY BY SQRT(1-X**2) AND THEN DIVIDE BY
+C         (NU+MU),(NU+MU-1),(NU+MU-2),...,(NU-MU+1) SO THAT
+C         CHECK VALUE IS 1.
+C
+      C2(I)=C2(I)*SX
+      K=2*MU
+      IF(K.LE.0) GO TO 750
+      DO 740 J=1,K
+      C2(I)=C2(I)/(DNU1+DMU+1.D0-DBLE(FLOAT(J)))
+  740 CALL XDADJ(C2(I),IC2(I))
+  750 CONTINUE
+C
+C         PLACE RESULTS IN REDUCED FORM.
+C
+  800 DO 810 I=1,LM1
+      CALL XDRED(C1(I),IC1(I))
+      CALL XDRED(C2(I),IC2(I))
+  810 CONTINUE
+      RETURN
+      END
+*DECK XDPMU
+      SUBROUTINE XDPMU(NU1,NU2,MU1,MU2,THETA,X,SX,ID,PQA,IPQA)
+C***BEGIN PROLOGUE  XDPMU
+C***REFER TO  XDLEGF
+C***ROUTINES CALLED  XDADD, XDADJ, XDPQNU
+C***DATE WRITTEN   820728   (YYMMDD)
+C***REVISION DATE  871119   (YYMMDD)
+C***CATEGORY NO.  C3a2,C9
+C***KEYWORDS  LEGENDRE FUNCTIONS
+C***AUTHOR  SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO COMPUTE THE VALUES OF LEGENDRE FUNCTIONS FOR XDLEGF.
+C METHOD: BACKWARD MU-WISE RECURRENCE FOR P(-MU,NU,X) FOR FIXED NU TO
+C         OBTAIN P(-MU2,NU1,X),P(-(MU2-1),NU1,X),....,P(-MU1,NU1,X)
+C         AND STORE IN ASCENDING MU ORDER.
+C***REFERENCES  OLVER AND SMITH,J.COMPUT.PHYSICS,51(1983),N0.3,502-518.
+C***END PROLOGUE  XDPMU
+      DOUBLE PRECISION PQA,NU1,NU2,P0,X,SX,THETA,X1,X2
+      DIMENSION PQA(*),IPQA(*)
+C
+C        CALL XDPQNU TO OBTAIN P(-MU2,NU,X)
+C
+C***FIRST EXECUTABLE STATEMENT   XDPMU
+      CALL XDPQNU(NU1,NU2,MU2,THETA,ID,PQA,IPQA)
+      P0=PQA(1)
+      IP0=IPQA(1)
+      MU=MU2-1
+C
+C        CALL XDPQNU TO OBTAIN P(-MU2-1,NU,X)
+C
+      CALL XDPQNU(NU1,NU2,MU,THETA,ID,PQA,IPQA)
+      N=MU2-MU1+1
+      PQA(N)=P0
+      IPQA(N)=IP0
+      IF(N.EQ.1) GO TO 300
+      PQA(N-1)=PQA(1)
+      IPQA(N-1)=IPQA(1)
+      IF(N.EQ.2) GO TO 300
+      J=N-2
+  290 CONTINUE
+C
+C        BACKWARD RECURRENCE IN MU TO OBTAIN
+C              P(-MU2,NU1,X),P(-(MU2-1),NU1,X),....P(-MU1,NU1,X)
+C              USING
+C              (NU-MU)*(NU+MU+1.)*P(-(MU+1),NU,X)=
+C                2.*MU*X*SQRT((1./(1.-X**2))*P(-MU,NU,X)-P(-(MU-1),NU,X)
+C
+      X1=2.D0*DBLE(FLOAT(MU))*X*SX*PQA(J+1)
+      X2=-(NU1-DBLE(FLOAT(MU)))*(NU1+DBLE(FLOAT(MU))+1.D0)*PQA(J+2)
+      CALL XDADD(X1,IPQA(J+1),X2,IPQA(J+2),PQA(J),IPQA(J))
+      CALL XDADJ(PQA(J),IPQA(J))
+      IF(J.EQ.1) GO TO 300
+      J=J-1
+      MU=MU-1
+      GO TO 290
+  300 RETURN
+      END
+*DECK XDPMUP
+      SUBROUTINE XDPMUP(NU1,NU2,MU1,MU2,PQA,IPQA)
+C***BEGIN PROLOGUE  XDPMUP
+C***REFER TO  XDLEGF
+C***ROUTINES CALLED  XDADJ
+C***DATE WRITTEN   820728   (YYMMDD)
+C***REVISION DATE  871119   (YYMMDD)
+C***CATEGORY NO.  C3a2,C9
+C***KEYWORDS  LEGENDRE FUNCTIONS
+C***AUTHOR  SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO COMPUTE THE VALUES OF LEGENDRE FUNCTIONS FOR XDLEGF.
+C        SUBROUTINE XDPMUP TRANSFORMS AN ARRAY OF LEGENDRE FUNCTIONS
+C        OF THE FIRST KIND OF NEGATIVE ORDER STORED IN ARRAY
+C        PQA INTO LEGENDRE FUNCTIONS OF THE FIRST KIND OF
+C        POSITIVE ORDER  STORED IN ARRAY PQA. THE ORIGINAL
+C        ARRAY IS DESTROYED.
+C***REFERENCES  OLVER AND SMITH,J.COMPUT.PHYSICS,51(1983),N0.3,502-518.
+C***END PROLOGUE  XDPMUP
+      DOUBLE PRECISION DMU,NU,NU1,NU2,PQA,PROD
+      DIMENSION PQA(*),IPQA(*)
+C***FIRST EXECUTABLE STATEMENT   XDPMUP
+      NU=NU1
+      MU=MU1
+      DMU=DBLE(FLOAT(MU))
+      N=IFIX(SNGL(NU2-NU1+.1))+(MU2-MU1)+1
+      J=1
+      IF(AMOD(SNGL(NU),1.).NE.0.) GO TO 210
+  200 IF(DMU.LT.NU+1.D0) GO TO 210
+      PQA(J)=0.
+      IPQA(J)=0
+      J=J+1
+      IF(J.GT.N) RETURN
+C        INCREMENT EITHER MU OR NU AS APPROPRIATE.
+      IF(NU2-NU1.GT..5D0) NU=NU+1.D0
+      IF(MU2.GT.MU1) MU=MU+1
+      GO TO 200
+C
+C        TRANSFORM P(-MU,NU,X) TO P(MU,NU,X) USING
+C        P(MU,NU,X)=(NU-MU+1)*(NU-MU+2)*...*(NU+MU)*P(-MU,NU,X)*(-1)**MU
+C
+  210 PROD=1.D0
+      IPROD=0
+      K=2*MU
+      IF(K.EQ.0) GO TO 222
+      DO 220 L=1,K
+      PROD=PROD*(DMU-NU-DBLE(FLOAT(L)))
+  220 CALL XDADJ(PROD,IPROD)
+  222 CONTINUE
+      DO 240 I=J,N
+      IF(MU.EQ.0) GO TO 225
+      PQA(I)=PQA(I)*PROD*DBLE(FLOAT((-1)**MU))
+      IPQA(I)=IPQA(I)+IPROD
+      CALL XDADJ(PQA(I),IPQA(I))
+  225 IF(NU2-NU1.GT..5D0) GO TO 230
+      PROD=(DMU-NU)*PROD*(-DMU-NU-1.D0)
+      CALL XDADJ(PROD,IPROD)
+      MU=MU+1
+      DMU=DMU+1.D0
+      GO TO 240
+  230 PROD=PROD*(-DMU-NU-1.D0)/(DMU-NU-1.D0)
+      CALL XDADJ(PROD,IPROD)
+      NU=NU+1.D0
+  240 CONTINUE
+      RETURN
+      END
+*DECK XDPNRM
+      SUBROUTINE XDPNRM(NU1,NU2,MU1,MU2,PQA,IPQA)
+C***BEGIN PROLOGUE  XDPNRM
+C***REFER TO  XDLEGF
+C***ROUTINES CALLED  XDADJ
+C***DATE WRITTEN   820728   (YYMMDD)
+C***REVISION DATE  871119   (YYMMDD)
+C***CATEGORY NO.  C3a2,C9
+C***KEYWORDS  LEGENDRE FUNCTIONS
+C***AUTHOR  SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO COMPUTE THE VALUES OF LEGENDRE FUNCTIONS FOR XDLEGF.
+C        SUBROUTINE XDPNRM TRANSFORMS AN ARRAY OF LEGENDRE
+C        FUNCTIONS OF THE FIRST KIND OF NEGATIVE ORDER STORED
+C        IN ARRAY PQA INTO NORMALIZED LEGENDRE POLYNOMIALS STORED
+C        IN ARRAY PQA. THE ORIGINAL ARRAY IS DESTROYED.
+C***REFERENCES  OLVER AND SMITH,J.COMPUT.PHYSICS,51(1983),N0.3,502-518.
+C***END PROLOGUE  XDPNRM
+      DOUBLE PRECISION C1,DMU,NU,NU1,NU2,PQA,PROD
+      DIMENSION PQA(*),IPQA(*)
+C***FIRST EXECUTABLE STATEMENT   XDPNRM
+      L=(MU2-MU1)+(NU2-NU1+1.5D0)
+      MU=MU1
+      DMU=DBLE(FLOAT(MU1))
+      NU=NU1
+C
+C         IF MU .GT.NU, NORM P =0.
+C
+      J=1
+  500 IF(DMU.LE.NU) GO TO 505
+      PQA(J)=0.
+      IPQA(J)=0
+      J=J+1
+      IF(J.GT.L) RETURN
+C
+C        INCREMENT EITHER MU OR NU AS APPROPRIATE.
+C
+      IF(MU2.GT.MU1) DMU=DMU+1.D0
+      IF(NU2-NU1.GT..5D0) NU=NU+1.D0
+      GO TO 500
+C
+C         TRANSFORM P(-MU,NU,X) INTO NORMALIZED P(MU,NU,X) USING
+C              NORM P(MU,NU,X)=
+C                 SQRT((NU+.5)*FACTORIAL(NU+MU)/FACTORIAL(NU-MU))
+C                              *P(-MU,NU,X)
+C
+  505 PROD=1.D0
+      IPROD=0
+      K=2*MU
+      IF(K.LE.0) GO TO 520
+      DO 510 I=1,K
+      PROD=PROD*DSQRT(NU+DMU+1.D0-DBLE(FLOAT(I)))
+  510 CALL XDADJ(PROD,IPROD)
+  520 DO 540 I=J,L
+      C1=PROD*DSQRT(NU+.5D0)
+      PQA(I)=PQA(I)*C1
+      IPQA(I)=IPQA(I)+IPROD
+      CALL XDADJ(PQA(I),IPQA(I))
+      IF(NU2-NU1.GT..5D0) GO TO 530
+      IF(DMU.GE.NU) GO TO 525
+      PROD=DSQRT(NU+DMU+1.D0)*PROD
+      IF(NU.GT.DMU) PROD=PROD*DSQRT(NU-DMU)
+      CALL XDADJ(PROD,IPROD)
+      MU=MU+1
+      DMU=DMU+1.D0
+      GO TO 540
+  525 PROD=0.
+      IPROD=0
+      MU=MU+1
+      DMU=DMU+1.D0
+      GO TO 540
+  530 PROD=DSQRT(NU+DMU+1.D0)*PROD
+      IF(NU.NE.DMU-1.D0) PROD=PROD/DSQRT(NU-DMU+1.D0)
+      CALL XDADJ(PROD,IPROD)
+      NU=NU+1.D0
+  540 CONTINUE
+      RETURN
+      END
+*DECK XDPQNU
+      SUBROUTINE XDPQNU(NU1,NU2,MU,THETA,ID,PQA,IPQA)
+C***BEGIN PROLOGUE  XDPQNU
+C***REFER TO  XDLEGF
+C***ROUTINES CALLED  XDADD, XDADJ, XDPSI
+C***COMMON BLOCKS    XDBLK1
+C***DATE WRITTEN   820728   (YYMMDD)
+C***REVISION DATE  871119   (YYMMDD)
+C***CATEGORY NO.  C3A2,C9
+C***KEYWORDS  LEGENDRE FUNCTIONS
+C***AUTHOR  SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO COMPUTE THE VALUES OF LEGENDRE FUNCTIONS FOR XDLEGF.
+C        SUBROUTINE XDPQNU CALCULATES INITIAL VALUES OF P OR Q
+C        USING POWER SERIES.  THEN XDPQNU PERFORMS FORWARD NU-WISE
+C        RECURRENCE TO OBTAIN P(-MU,NU,X), Q(0,NU,X), OR Q(1,NU,X).
+C        THE FORWARD NU-WISE RECURRENCE IS STABLE FOR P FOR ALL
+C        VALUES OF MU, AND IS STABLE FOR Q FOR MU=0 OR 1.
+C***REFERENCES  OLVER AND SMITH,J.COMPUT.PHYSICS,51(1983),N0.3,502-518.
+C***END PROLOGUE  XDPQNU
+      DOUBLE PRECISION A,NU,NU1,NU2,PQ,PQA,XDPSI,R,THETA,W,X,X1,X2,XS,
+     1 Y,Z
+      DOUBLE PRECISION DI,DMU,PQ1,PQ2,FACTMU,FLOK
+      DIMENSION PQA(*),IPQA(*)
+      COMMON /XDBLK1/ NBITSF
+C
+C        J0, IPSIK, AND IPSIX ARE INITIALIZED IN THIS SUBROUTINE.
+C        J0 IS THE NUMBER OF TERMS USED IN SERIES EXPANSION
+C        IN SUBROUTINE XDPQNU.
+C        IPSIK, IPSIX ARE VALUES OF K AND X RESPECTIVELY
+C        USED IN THE CALCULATION OF THE XDPSI FUNCTION.
+C
+C***FIRST EXECUTABLE STATEMENT   XDPQNU
+      J0=NBITSF
+      IPSIK=1+(NBITSF/10)
+      IPSIX=5*IPSIK
+      IPQ=0
+C        FIND NU IN INTERVAL [-.5,.5) IF ID=2  ( CALCULATION OF Q )
+      NU=DMOD(NU1,1.D0)
+      IF(NU.GE..5D0) NU=NU-1.D0
+C        FIND NU IN INTERVAL (-1.5,-.5] IF ID=1,3, OR 4  ( CALCULATION OF P )
+      IF(ID.NE.2.AND.NU.GT.-.5D0) NU=NU-1.D0
+C        CALCULATE MU FACTORIAL
+      K=MU
+      DMU=DBLE(FLOAT(MU))
+      IF(MU.LE.0) GO TO 60
+      FACTMU=1.D0
+      IF=0
+      DO 50 I=1,K
+      FACTMU=FACTMU*DBLE(FLOAT(I))
+   50 CALL XDADJ(FACTMU,IF)
+   60 IF(K.EQ.0) FACTMU=1.D0
+      IF(K.EQ.0) IF=0
+C
+C        X=COS(THETA)
+C        Y=SIN(THETA/2)**2=(1-X)/2=.5-.5*X
+C        R=TAN(THETA/2)=SQRT((1-X)/(1+X)
+C
+      X=DCOS(THETA)
+      Y=DSIN(THETA/2.D0)**2
+      R=DTAN(THETA/2.D0)
+C
+C        USE ASCENDING SERIES TO CALCULATE TWO VALUES OF P OR Q
+C        FOR USE AS STARTING VALUES IN RECURRENCE RELATION.
+C
+      PQ2=0.0D0
+      DO 100 J=1,2
+      IPQ1=0
+      IF(ID.EQ.2) GO TO 80
+C
+C        SERIES FOR P ( ID = 1, 3, OR 4 )
+C        P(-MU,NU,X)=1./FACTORIAL(MU)*SQRT(((1.-X)/(1.+X))**MU)
+C                *SUM(FROM 0 TO J0-1)A(J)*(.5-.5*X)**J
+C
+      IPQ=0
+      PQ=1.D0
+      A=1.D0
+      IA=0
+      DO 65 I=2,J0
+      DI=DBLE(FLOAT(I))
+      A=A*Y*(DI-2.D0-NU)*(DI-1.D0+NU)/((DI-1.D0+DMU)*(DI-1.D0))
+      CALL XDADJ(A,IA)
+      IF(A.EQ.0.D0) GO TO 66
+      CALL XDADD(PQ,IPQ,A,IA,PQ,IPQ)
+   65 CONTINUE
+   66 CONTINUE
+      IF(MU.LE.0) GO TO 90
+      X2=R
+      X1=PQ
+      K=MU
+      DO 77 I=1,K
+      X1=X1*X2
+   77 CALL XDADJ(X1,IPQ)
+      PQ=X1/FACTMU
+      IPQ=IPQ-IF
+      CALL XDADJ(PQ,IPQ)
+      GO TO 90
+C
+C        Z=-LN(R)=.5*LN((1+X)/(1-X))
+C
+   80 Z=-DLOG(R)
+      W=XDPSI(NU+1.D0,IPSIK,IPSIX)
+      XS=1.D0/DSIN(THETA)
+C
+C        SERIES SUMMATION FOR Q ( ID = 2 )
+C        Q(0,NU,X)=SUM(FROM 0 TO J0-1)((.5*LN((1+X)/(1-X))
+C    +XDPSI(J+1,IPSIK,IPSIX)-XDPSI(NU+1,IPSIK,IPSIX)))*A(J)*(.5-.5*X)**J
+C
+C        Q(1,NU,X)=-SQRT(1./(1.-X**2))+SQRT((1-X)/(1+X))
+C             *SUM(FROM 0 T0 J0-1)(-NU*(NU+1)/2*LN((1+X)/(1-X))
+C                 +(J-NU)*(J+NU+1)/(2*(J+1))+NU*(NU+1)*
+C     (XDPSI(NU+1,IPSIK,IPSIX)-XDPSI(J+1,IPSIK,IPSIX))*A(J)*(.5-.5*X)**J
+C
+C        NOTE, IN THIS LOOP K=J+1
+C
+      PQ=0.D0
+      IPQ=0
+      IA=0
+      A=1.D0
+      DO 85 K=1,J0
+      FLOK=DBLE(FLOAT(K))
+      IF(K.EQ.1) GO TO 81
+      A=A*Y*(FLOK-2.D0-NU)*(FLOK-1.D0+NU)/((FLOK-1.D0+DMU)*(FLOK-1.D0))
+      CALL XDADJ(A,IA)
+   81 CONTINUE
+      IF(MU.GE.1) GO TO 83
+      X1=(XDPSI(FLOK,IPSIK,IPSIX)-W+Z)*A
+      IX1=IA
+      CALL XDADD(PQ,IPQ,X1,IX1,PQ,IPQ)
+      GO TO 85
+   83 X1=(NU*(NU+1.D0)*(Z-W+XDPSI(FLOK,IPSIK,IPSIX))+(NU-FLOK+1.D0)
+     1  *(NU+FLOK)/(2.D0*K))*A
+      IX1=IA
+      CALL XDADD(PQ,IPQ,X1,IX1,PQ,IPQ)
+   85 CONTINUE
+      IF(MU.GE.1) PQ=-R*PQ
+      IXS=0
+      IF(MU.GE.1) CALL XDADD(PQ,IPQ,-XS,IXS,PQ,IPQ)
+      IF(J.EQ.2) MU=-MU
+      IF(J.EQ.2) DMU=-DMU
+   90 IF(J.EQ.1) PQ2=PQ
+      IF(J.EQ.1) IPQ2=IPQ
+      NU=NU+1.D0
+  100 CONTINUE
+      K=0
+      IF(NU-1.5D0.LT.NU1) GO TO 120
+      K=K+1
+      PQA(K)=PQ2
+      IPQA(K)=IPQ2
+      IF(NU.GT.NU2+.5D0) RETURN
+  120 PQ1=PQ
+      IPQ1=IPQ
+      IF(NU.LT.NU1+.5D0) GO TO 130
+      K=K+1
+      PQA(K)=PQ
+      IPQA(K)=IPQ
+      IF(NU.GT.NU2+.5D0) RETURN
+C
+C        FORWARD NU-WISE RECURRENCE FOR F(MU,NU,X) FOR FIXED MU
+C        USING
+C        (NU+MU+1)*F(MU,NU,X)=(2.*NU+1)*F(MU,NU,X)-(NU-MU)*F(MU,NU-1,X)
+C        WHERE F(MU,NU,X) MAY BE P(-MU,NU,X) OR IF MU IS REPLACED
+C        BY -MU THEN F(MU,NU,X) MAY BE Q(MU,NU,X).
+C        NOTE, IN THIS LOOP, NU=NU+1
+C
+  130 X1=(2.D0*NU-1.D0)/(NU+DMU)*X*PQ1
+      X2=(NU-1.D0-DMU)/(NU+DMU)*PQ2
+      CALL XDADD(X1,IPQ1,-X2,IPQ2,PQ,IPQ)
+      CALL XDADJ(PQ,IPQ)
+      NU=NU+1.D0
+      PQ2=PQ1
+      IPQ2=IPQ1
+      GO TO 120
+C
+C
+      END
+*DECK XDPSI
+      DOUBLE PRECISION FUNCTION XDPSI(A,IPSIK,IPSIX)
+C***BEGIN PROLOGUE  XDPSI
+C***REFER TO  XDLEGF
+C***ROUTINES CALLED  (NONE)
+C***DATE WRITTEN   820728   (YYMMDD)
+C***REVISION DATE  871119   (YYMMDD)
+C***CATEGORY NO.  C7c
+C***KEYWORDS  PSI FUNCTION
+C***AUTHOR  SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO COMPUTE VALUES OF THE PSI FUNCTION FOR XDLEGF.
+C        FUNCTION PSI(A,IPSIK,IPSIX) RETURNS THE VALUE OF THE
+C        DIGAMMA ( OR PSI ) FUNCTION OF THE ARGUMENT A TO THE
+C        CALLING ROUTINE.
+C***REFERENCES  OLVER AND SMITH,J.COMPUT.PHYSICS,51(1983),N0.3,502-518.
+C***END PROLOGUE  XDPSI
+      DOUBLE PRECISION A,B,C,CNUM,CDENOM
+      DIMENSION CNUM(12),CDENOM(12)
+C
+C        CNUM(I) AND CDENOM(I) ARE THE ( REDUCED ) NUMERATOR
+C        AND 2*I*DENOMINATOR RESPECTIVELY OF THE 2*I TH BERNOULLI
+C        NUMBER.
+C
+      DATA CNUM(1),CNUM(2),CNUM(3),CNUM(4),CNUM(5),CNUM(6),CNUM(7),
+     1CNUM(8),CNUM(9),CNUM(10),CNUM(11),CNUM(12)
+     2    / 1.D0,     -1.D0,    1.D0,     -1.D0, 1.D0,
+     3   -691.D0,  1.D0,     -3617.D0, 43867.D0, -174611.D0, 77683.D0,
+     4   -236364091.D0/
+      DATA CDENOM(1),CDENOM(2),CDENOM(3),CDENOM(4),CDENOM(5),CDENOM(6),
+     1 CDENOM(7),CDENOM(8),CDENOM(9),CDENOM(10),CDENOM(11),CDENOM(12)
+     2/12.D0,120.D0,   252.D0,   240.D0,132.D0,
+     3  32760.D0, 12.D0,  8160.D0, 14364.D0, 6600.D0, 276.D0, 65520.D0/
+C***FIRST EXECUTABLE STATEMENT   XDPSI
+      N=MAX0(0,IPSIX-IFIX(SNGL(A)))
+      B=DBLE(FLOAT(N))+A
+      K1=IPSIK-1
+C
+C        SERIES EXPANSION FOR A .GT. IPSIX USING IPSIK-1 TERMS.
+C
+      C=0.D0
+      DO 12 I=1,K1
+      K=IPSIK-I
+   12 C=(C+CNUM(K)/CDENOM(K))/B**2
+      XDPSI=DLOG(B)-(C+.5D0/B)
+      IF(N.EQ.0) GO TO 20
+      B=0.
+C
+C        RECURRENCE FOR A .LE. IPSIX.
+C
+      DO 15 M=1,N
+   15 B=B+1.D0/(DBLE(FLOAT(N-M))+A)
+      XDPSI=XDPSI-B
+   20 RETURN
+      END
+*DECK XDQMU
+      SUBROUTINE XDQMU(NU1,NU2,MU1,MU2,THETA,X,SX,ID,PQA,IPQA)
+C***BEGIN PROLOGUE  XDQMU
+C***REFER TO  XDLEGF
+C***ROUTINES CALLED  XDADD, XDADJ, XDPQNU
+C***DATE WRITTEN   820728   (YYMMDD)
+C***REVISION DATE  871119   (YYMMDD)
+C***CATEGORY NO.  C3a2,C9
+C***KEYWORDS  LEGENDRE FUNCTIONS
+C***AUTHOR  SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO COMPUTE THE VALUES OF LEGENDRE FUNCTIONS FOR XDLEGF.
+C METHOD: FORWARD MU-WISE RECURRENCE FOR Q(MU,NU,X) FOR FIXED NU TO
+C         OBTAIN  Q(MU1,NU,X),Q(MU1+1,NU,X),....,Q(MU2,NU,X)
+C***REFERENCES  OLVER AND SMITH,J.COMPUT.PHYSICS,51(1983),N0.3,502-518.
+C***END PROLOGUE  XDQMU
+      DIMENSION PQA(*),IPQA(*)
+      DOUBLE PRECISION DMU,NU,NU1,NU2,PQ,PQA,PQ1,PQ2,SX,X,X1,X2
+      DOUBLE PRECISION THETA
+C***FIRST EXECUTABLE STATEMENT   XDQMU
+      MU=0
+C
+C        CALL XDPQNU TO OBTAIN Q(0.,NU1,X)
+C
+      CALL XDPQNU(NU1,NU2,MU,THETA,ID,PQA,IPQA)
+      PQ2=PQA(1)
+      IPQ2=IPQA(1)
+      MU=1
+C
+C        CALL XDPQNU TO OBTAIN Q(1.,NU1,X)
+C
+      CALL XDPQNU(NU1,NU2,MU,THETA,ID,PQA,IPQA)
+      NU=NU1
+      K=0
+      MU=1
+      DMU=1.D0
+      PQ1=PQA(1)
+      IPQ1=IPQA(1)
+      IF(MU1.GT.0) GO TO 310
+      K=K+1
+      PQA(K)=PQ2
+      IPQA(K)=IPQ2
+      IF(MU2.LT.1) GO TO 330
+  310 IF(MU1.GT.1) GO TO 320
+      K=K+1
+      PQA(K)=PQ1
+      IPQA(K)=IPQ1
+      IF(MU2.LE.1) GO TO 330
+  320 CONTINUE
+C
+C        FORWARD RECURRENCE IN MU TO OBTAIN
+C                  Q(MU1,NU,X),Q(MU1+1,NU,X),....,Q(MU2,NU,X) USING
+C             Q(MU+1,NU,X)=-2.*MU*X*SQRT(1./(1.-X**2))*Q(MU,NU,X)
+C                               -(NU+MU)*(NU-MU+1.)*Q(MU-1,NU,X)
+C
+      X1=-2.D0*DMU*X*SX*PQ1
+      X2=(NU+DMU)*(NU-DMU+1.D0)*PQ2
+      CALL XDADD(X1,IPQ1,-X2,IPQ2,PQ,IPQ)
+      CALL XDADJ(PQ,IPQ)
+      PQ2=PQ1
+      IPQ2=IPQ1
+      PQ1=PQ
+      IPQ1=IPQ
+      MU=MU+1
+      DMU=DMU+1.D0
+      IF(MU.LT.MU1) GO TO 320
+      K=K+1
+      PQA(K)=PQ
+      IPQA(K)=IPQ
+      IF(MU2.GT.MU) GO TO 320
+  330 RETURN
+      END
+*DECK XDQNU
+      SUBROUTINE XDQNU(NU1,NU2,MU1,THETA,X,SX,ID,PQA,IPQA)
+C***BEGIN PROLOGUE  XDQNU
+C***REFER TO  XDLEGF
+C***ROUTINES CALLED  XDADD, XDADJ, XDPQNU
+C***DATE WRITTEN   820728   (YYMMDD)
+C***REVISION DATE  871119   (YYMMDD)
+C***CATEGORY NO.  C3a2,C9
+C***KEYWORDS  LEGENDRE FUNCTIONS
+C***AUTHOR  SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO COMPUTE THE VALUES OF LEGENDRE FUNCTIONS FOR XDLEGF.
+C  METHOD: BACKWARD NU-WISE RECURRENCE FOR Q(MU,NU,X) FOR FIXED MU TO
+C          OBTAIN Q(MU1,NU1,X),Q(MU1,NU1+1,X),....,Q(MU1,NU2,X)
+C***REFERENCES  OLVER AND SMITH,J.COMPUT.PHYSICS,51(1983),N0.3,502-518.
+C***END PROLOGUE  XDQNU
+      DIMENSION PQA(*),IPQA(*)
+      DOUBLE PRECISION DMU,NU,NU1,NU2,PQ,PQA,PQ1,PQ2,SX,X,X1,X2
+      DOUBLE PRECISION THETA,PQL1,PQL2
+C***FIRST EXECUTABLE STATEMENT   XDQNU
+      K=0
+      PQ2=0.0D0
+      IPQ2=0
+      PQL2=0.0D0
+      IPQL2=0
+      IF(MU1.EQ.1) GO TO 290
+      MU=0
+C
+C        CALL XDPQNU TO OBTAIN Q(0.,NU2,X) AND Q(0.,NU2-1,X)
+C
+      CALL XDPQNU(NU1,NU2,MU,THETA,ID,PQA,IPQA)
+      IF(MU1.EQ.0) RETURN
+      K=(NU2-NU1+1.5D0)
+      PQ2=PQA(K)
+      IPQ2=IPQA(K)
+      PQL2=PQA(K-1)
+      IPQL2=IPQA(K-1)
+  290 MU=1
+C
+C        CALL XDPQNU TO OBTAIN Q(1.,NU2,X) AND Q(1.,NU2-1,X)
+C
+      CALL XDPQNU(NU1,NU2,MU,THETA,ID,PQA,IPQA)
+      IF(MU1.EQ.1) RETURN
+      NU=NU2
+      PQ1=PQA(K)
+      IPQ1=IPQA(K)
+      PQL1=PQA(K-1)
+      IPQL1=IPQA(K-1)
+  300 MU=1
+      DMU=1.D0
+  320 CONTINUE
+C
+C        FORWARD RECURRENCE IN MU TO OBTAIN Q(MU1,NU2,X) AND
+C              Q(MU1,NU2-1,X) USING
+C              Q(MU+1,NU,X)=-2.*MU*X*SQRT(1./(1.-X**2))*Q(MU,NU,X)
+C                   -(NU+MU)*(NU-MU+1.)*Q(MU-1,NU,X)
+C
+C              FIRST FOR NU=NU2
+C
+      X1=-2.D0*DMU*X*SX*PQ1
+      X2=(NU+DMU)*(NU-DMU+1.D0)*PQ2
+      CALL XDADD(X1,IPQ1,-X2,IPQ2,PQ,IPQ)
+      CALL XDADJ(PQ,IPQ)
+      PQ2=PQ1
+      IPQ2=IPQ1
+      PQ1=PQ
+      IPQ1=IPQ
+      MU=MU+1
+      DMU=DMU+1.D0
+      IF(MU.LT.MU1) GO TO 320
+      PQA(K)=PQ
+      IPQA(K)=IPQ
+      IF(K.EQ.1) RETURN
+      IF(NU.LT.NU2) GO TO 340
+C
+C              THEN FOR NU=NU2-1
+C
+      NU=NU-1.D0
+      PQ2=PQL2
+      IPQ2=IPQL2
+      PQ1=PQL1
+      IPQ1=IPQL1
+      K=K-1
+      GO TO 300
+C
+C         BACKWARD RECURRENCE IN NU TO OBTAIN
+C              Q(MU1,NU1,X),Q(MU1,NU1+1,X),....,Q(MU1,NU2,X)
+C              USING
+C              (NU-MU+1.)*Q(MU,NU+1,X)=
+C                       (2.*NU+1.)*X*Q(MU,NU,X)-(NU+MU)*Q(MU,NU-1,X)
+C
+  340 PQ1=PQA(K)
+      IPQ1=IPQA(K)
+      PQ2=PQA(K+1)
+      IPQ2=IPQA(K+1)
+  350 IF(NU.LE.NU1) RETURN
+      K=K-1
+      X1=(2.D0*NU+1.D0)*X*PQ1/(NU+DMU)
+      X2=-(NU-DMU+1.D0)*PQ2/(NU+DMU)
+      CALL XDADD(X1,IPQ1,X2,IPQ2,PQ,IPQ)
+      CALL XDADJ(PQ,IPQ)
+      PQ2=PQ1
+      IPQ2=IPQ1
+      PQ1=PQ
+      IPQ1=IPQ
+      PQA(K)=PQ
+      IPQA(K)=IPQ
+      NU=NU-1.D0
+      GO TO 350
+      END
+*DECK XSLEGF
+      SUBROUTINE XSLEGF(DNU1,NUDIFF,MU1,MU2,THETA,ID,PQA,IPQA)
+C***BEGIN PROLOGUE   XSLEGF
+C***DATE WRITTEN   820728   (YYMMDD)
+C***REVISION DATE  871015   (YYMMDD)
+C***CATEGORY NO.  C3a2,C9
+C***KEYWORDS  LEGENDRE FUNCTIONS
+C***AUTHOR  SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO COMPUTE THE VALUES OF LEGENDRE FUNCTIONS
+C***DESCRIPTION
+C
+C   XSLEGF: Extended-range Single-precision Legendre Functions
+C
+C   A feature of the XSLEGF subroutine for Legendre functions is
+C the use of extended-range arithmetic, a software extension of
+C ordinary floating-point arithmetic that greatly increases the
+C exponent range of the representable numbers. This avoids the
+C need for scaling the solutions to lie within the exponent range
+C of the most restrictive manufacturer's hardware. The increased
+C exponent range is achieved by allocating an integer storage
+C location together with each floating-point storage location.
+C
+C   The interpretation of the pair (X,I) where X is floating-point
+C and I is integer is X*(IR**I) where IR is the internal radix of
+C the computer arithmetic.
+C
+C   This subroutine computes one of the following vectors:
+C
+C 1. Legendre function of the first kind of negative order, either
+C    a. P(-MU1,NU,X), P(-MU1-1,NU,X), ..., P(-MU2,NU,X) or
+C    b. P(-MU,NU1,X), P(-MU,NU1+1,X), ..., P(-MU,NU2,X)
+C 2. Legendre function of the second kind, either
+C    a. Q(MU1,NU,X), Q(MU1+1,NU,X), ..., Q(MU2,NU,X) or
+C    b. Q(MU,NU1,X), Q(MU,NU1+1,X), ..., Q(MU,NU2,X)
+C 3. Legendre function of the first kind of positive order, either
+C    a. P(MU1,NU,X), P(MU1+1,NU,X), ..., P(MU2,NU,X) or
+C    b. P(MU,NU1,X), P(MU,NU1+1,X), ..., P(MU,NU2,X)
+C 4. Normalized Legendre polynomials, either
+C    a. PN(MU1,NU,X), PN(MU1+1,NU,X), ..., PN(MU2,NU,X) or
+C    b. PN(MU,NU1,X), PN(MU,NU1+1,X), ..., PN(MU,NU2,X)
+C
+C where X = COS(THETA).
+C
+C   The input values to XSLEGF are DNU1, NUDIFF, MU1, MU2, THETA,
+C and ID. These must satisfy
+C
+C    DNU1 is REAL and greater than or equal to -0.5;
+C    NUDIFF is INTEGER and non-negative;
+C    MU1 is INTEGER and non-negative;
+C    MU2 is INTEGER and greater than or equal to MU1;
+C    THETA is REAL and in the half-open interval (0,PI/2];
+C    ID is INTEGER and equal to 1, 2, 3 or 4;
+C
+C and  additionally either NUDIFF = 0 or MU2 = MU1.
+C
+C   If ID=1 and NUDIFF=0, a vector of type 1a above is computed
+C with NU=DNU1.
+C
+C   If ID=1 and MU1=MU2, a vector of type 1b above is computed
+C with NU1=DNU1, NU2=DNU1+NUDIFF and MU=MU1.
+C
+C   If ID=2 and NUDIFF=0, a vector of type 2a above is computed
+C with NU=DNU1.
+C
+C   If ID=2 and MU1=MU2, a vector of type 2b above is computed
+C with NU1=DNU1, NU2=DNU1+NUDIFF and MU=MU1.
+C
+C   If ID=3 and NUDIFF=0, a vector of type 3a above is computed
+C with NU=DNU1.
+C
+C   If ID=3 and MU1=MU2, a vector of type 3b above is computed
+C with NU1=DNU1, NU2=DNU1+NUDIFF and MU=MU1.
+C
+C   If ID=4 and NUDIFF=0, a vector of type 4a above is computed
+C with NU=DNU1.
+C
+C   If ID=4 and MU1=MU2, a vector of type 4b above is computed
+C with NU1=DNU1, NU2=DNU1+NUDIFF and MU=MU1.
+C
+C   In each case the vector of computed Legendre function values
+C is returned in the extended-range vector (PQA(I),IPQA(I)). The
+C length of this vector is either MU2-MU1+1 or NUDIFF+1.
+C
+C Where possible, XSLEGF returns IPQA(I) as zero. In this case the
+C value of the Legendre function is contained entirely in PQA(I),
+C so it can be used in subsequent computations without further
+C consideration of extended-range arithmetic. If IPQA(I) is nonzero,
+C then the value of the Legendre function is not representable in
+C floating-point because of underflow or overflow. The program that
+C calls XSLEGF must test IPQA(I) to ensure correct usage.
+C
+C***REFERENCES  OLVER AND SMITH,J.COMPUT.PHYSICS,51(1983),N0.3,502-518.
+C***ROUTINES CALLED  XERROR, XSPMU, XSPMUP, XSPNRM, XSPQNU, XSQMU, XSQNU,
+C                    XSRED, XSSET
+C***END PROLOGUE  XSLEGF
+      REAL PQA,DNU1,DNU2,SX,THETA,X,PI2
+      DIMENSION PQA(*),IPQA(*)
+C
+C***FIRST EXECUTABLE STATEMENT   XSLEGF
+      CALL XSSET (0, 0, 0.0, 0)
+      PI2=2.*ATAN(1.)
+C
+C        ZERO OUTPUT ARRAYS
+C
+      L=(MU2-MU1)+NUDIFF+1
+      DO 290 I=1,L
+      PQA(I)=0.
+  290 IPQA(I)=0
+C
+C        CHECK FOR VALID INPUT VALUES
+C
+      IF(NUDIFF.LT.0) GO TO 400
+      IF(DNU1.LT.-.5) GO TO 400
+      IF(MU2.LT.MU1) GO TO 400
+      IF(MU1.LT.0) GO TO 400
+      IF(THETA.LE.0..OR.THETA.GT.PI2) GO TO 420
+      IF(ID.LT.1.OR.ID.GT.4) GO TO 400
+      IF((MU1.NE.MU2).AND.(NUDIFF.GT.0)) GO TO 400
+C
+C        IF DNU1 IS NOT AN INTEGER, NORMALIZED P(MU,DNU,X)
+C        CANNOT BE CALCULATED.  IF DNU1 IS AN INTEGER AND
+C        MU1.GT.DNU2 THEN ALL VALUES OF P(+MU,DNU,X) AND
+C        NORMALIZED P(MU,NU,X) WILL BE ZERO.
+C
+      DNU2=DNU1+NUDIFF
+      IF((ID.EQ.3).AND.(AMOD(DNU1,1.).NE.0.)) GO TO 295
+      IF((ID.EQ.4).AND.(AMOD(DNU1,1.).NE.0.)) GO TO 400
+      IF((ID.EQ.3.OR.ID.EQ.4).AND.(FLOAT(MU1)).GT.DNU2) RETURN
+  295 CONTINUE
+C
+      X=COS(THETA)
+      SX=1./SIN(THETA)
+      IF(ID.EQ.2) GO TO 300
+      IF(MU2-MU1.LE.0) GO TO 360
+C
+C        FIXED NU, VARIABLE MU
+C        CALL XSPMU TO CALCULATE P(-MU1,NU,X),....,P(-MU2,NU,X)
+C
+      CALL XSPMU(DNU1,DNU2,MU1,MU2,THETA,X,SX,ID,PQA,IPQA)
+      GO TO 380
+C
+  300 IF(MU2.EQ.MU1) GO TO 320
+C
+C        FIXED NU, VARIABLE MU
+C        CALL XSQMU TO CALCULATE Q(MU1,NU,X),....,Q(MU2,NU,X)
+C
+      CALL XSQMU(DNU1,DNU2,MU1,MU2,THETA,X,SX,ID,PQA,IPQA)
+      GO TO 390
+C
+C        FIXED MU, VARIABLE NU
+C        CALL XSQNU TO CALCULATE Q(MU,DNU1,X),....,Q(MU,DNU2,X)
+C
+  320 CALL XSQNU(DNU1,DNU2,MU1,THETA,X,SX,ID,PQA,IPQA)
+      GO TO 390
+C
+C        FIXED MU, VARIABLE NU
+C        CALL XSPQNU TO CALCULATE P(-MU,DNU1,X),....,P(-MU,DNU2,X)
+C
+  360 CALL XSPQNU(DNU1,DNU2,MU1,THETA,ID,PQA,IPQA)
+C
+C        IF ID = 3, TRANSFORM P(-MU,NU,X) VECTOR INTO
+C        P(MU,NU,X) VECTOR.
+C
+  380 IF(ID.EQ.3) CALL XSPMUP(DNU1,DNU2,MU1,MU2,PQA,IPQA)
+C
+C        IF ID = 4, TRANSFORM P(-MU,NU,X) VECTOR INTO
+C        NORMALIZED P(MU,NU,X) VECTOR.
+C
+      IF(ID.EQ.4) CALL XSPNRM(DNU1,DNU2,MU1,MU2,PQA,IPQA)
+C
+C        PLACE RESULTS IN REDUCED FORM IF POSSIBLE
+C        AND RETURN TO MAIN PROGRAM.
+C
+  390 DO 395 I=1,L
+      CALL XSRED(PQA(I),IPQA(I))
+  395 CONTINUE
+      RETURN
+C
+C        *****     ERROR TERMINATION     *****
+C
+  400 CALL XERROR('XSLEGF: DNU1,NUDIFF,MU1,MU2, or ID not valid',44,1,1)
+      GO TO 430
+  420 CALL XERROR('XSLEGF: THETA out of range',26,2,1)
+  430 RETURN
+      END
+*DECK XSCSRT
+      SUBROUTINE XSCSRT(DNU1,NUDIFF,MU1,MU2,THETA,P,Q,R,IP,IQ,IR,C1,IC1
+     1   ,C2,IC2)
+C***BEGIN PROLOGUE   XSCSRT
+C***DATE WRITTEN   820728   (YYMMDD)
+C***REVISION DATE  850805   (YYMMDD)
+C***CATEGORY NO.  C3a2,C9
+C***KEYWORDS  LEGENDRE FUNCTIONS
+C***AUTHOR  SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO COMPUTE CHECK VALUES FOR LEGENDRE FUNCTIONS
+C***DESCRIPTION
+C
+C        SUBROUTINE XSCSRT CALCULATES CASORATI (CROSS PRODUCT)
+C        CHECK VALUES AND STORES THEM IN ARRAYS C1 AND C2 WITH
+C        EXPONENTS IN ARRAYS IC1 AND IC2.  CALCULATIONS ARE BASED
+C        ON PREVIOUSLY CALCULATED LEGENDRE FUNCTIONS OF THE
+C        FIRST KIND (NEGATIVE ORDER) IN ARRAY P, THE SECOND KIND
+C        IN ARRAY Q, THE FIRST KIND (POSITIVE ORDER) IN ARRAY R.
+C        RESULTS SHOULD BE 1.0 TO WITHIN ROUNDOFF ERROR.
+C
+C***REFERENCES  OLVER AND SMITH,J.COMPUT.PHYSICS,51(1983),N0.3,502-518.
+C***ROUTINES CALLED  XSADD, XSADJ, XSRED
+C***END PROLOGUE  XSCSRT
+      REAL C1,C2,DMU,DMU1,NU,DNU1,DNU2,P,Q,R,THETA,SX,X1,X2
+      DIMENSION P(*),IP(*),Q(*),IQ(*),R(*),IR(*)
+      DIMENSION C1(*),IC1(*),C2(*),IC2(*)
+C
+C         PLACE ALL INPUT IN ADJUSTED FORM.
+C
+C***FIRST EXECUTABLE STATEMENT   XSCSRT
+      L=NUDIFF+(MU2-MU1)+1
+      LM1=L-1
+      DNU2=DNU1+NUDIFF
+      DO 500 I=1,L
+      CALL XSADJ(P(I),IP(I))
+      CALL XSADJ(Q(I),IQ(I))
+      CALL XSADJ(R(I),IR(I))
+  500 CONTINUE
+C
+C         CHECKS FOR FIXED MU, VARIABLE NU
+C
+      IF(MU2.GT.MU1) GO TO 700
+      DMU1=(FLOAT(MU1))
+      DO 650 I=1,LM1
+      C1(I)=0.
+      C2(I)=0.
+      NU=DNU1+(FLOAT(I))-1.
+C
+C         CASORATI 2
+C
+C         (MU+NU+1)*P(-MU,NU+1,X)*Q(MU,NU,X)
+C               +(MU-NU-1)*P(-MU,NU,X)*Q(MU,NU+1,X)=COS(MU*PI)
+C
+      X1=P(I+1)*Q(I)
+      IX1=IP(I+1)+IQ(I)
+      CALL XSADJ(X1,IX1)
+      X2=P(I)*Q(I+1)
+      IX2=IP(I)+IQ(I+1)
+      CALL XSADJ(X2,IX2)
+      X1=(DMU1+NU+1.)*X1
+      X2=(DMU1-NU-1.)*X2
+      CALL XSADD(X1,IX1,X2,IX2,C1(I),IC1(I))
+      CALL XSADJ(C1(I),IC1(I))
+C
+C         MULTIPLY BY (-1)**MU SO THAT CHECK VALUE IS 1.
+C
+      C1(I)=C1(I)*(FLOAT((-1)**MU1))
+C
+C         CASORATI 1
+C
+C         P(MU,NU+1,X)*Q(MU,NU,X)-P(MU,NU,X)*Q(MU,NU+1,X)=
+C               GAMMA(NU+MU+1)/GAMMA(NU-MU+2)
+C
+      IF(DMU1.GE.NU+1..AND.AMOD(NU,1.).EQ.0.) GO TO 630
+      X1=R(I+1)*Q(I)
+      IX1=IR(I+1)+IQ(I)
+      CALL XSADJ(X1,IX1)
+      X2=R(I)*Q(I+1)
+      IX2=IR(I)+IQ(I+1)
+      CALL XSADJ(X2,IX2)
+      CALL XSADD(X1,IX1,-X2,IX2,C2(I),IC2(I))
+C
+C         DIVIDE BY (NU+MU),(NU+MU-1),(NU+MU-2),....(NU-MU+2),
+C         SO THAT CHECK VALUE IS 1.
+C
+      K=2*MU1-1
+      DO 620 J=1,K
+      IF(K.LE.0) GO TO 620
+      C2(I)=C2(I)/(NU+DMU1+1.-(FLOAT(J)))
+  620 CALL XSADJ(C2(I),IC2(I))
+      IF(K.LE.0) C2(I)=(NU+1.)*C2(I)
+      GO TO 650
+  630 C2(I)=0.
+      IC2(I)=0
+  650 CONTINUE
+      GO TO 800
+C
+C         CHECKS FOR FIXED NU, VARIABLE MU
+C
+  700 CONTINUE
+      SX=SIN(THETA)
+      DO 750 I=1,LM1
+      C1(I)=0.
+      C2(I)=0.
+C
+C         CASORATI 4
+C
+C         (MU+NU+1)*(MU-NU)*P(-(MU+1),NU,X)*Q(MU,NU,X)
+C              -P(-MU,NU,X)*Q(MU+1,NU,X)=COS(MU*PI)/SQRT(1-X**2)
+C
+      MU=MU1+I-1
+      DMU=(FLOAT(MU))
+      X1=P(I+1)*Q(I)
+      IX1=IP(I+1)+IQ(I)
+      CALL XSADJ(X1,IX1)
+      X2=P(I)*Q(I+1)
+      IX2=IP(I)+IQ(I+1)
+      CALL XSADJ(X2,IX2)
+      X1=(DMU+DNU1+1.)*(DMU-DNU1)*X1
+C
+C         MULTIPLY BY SQRT(1-X**2)*(-1)**MU SO THAT CHECK VALUE IS 1.
+C
+      CALL XSADD(X1,IX1,-X2,IX2,C1(I),IC1(I))
+      C1(I)=SX*C1(I)*(FLOAT((-1)**MU))
+      CALL XSADJ(C1(I),IC1(I))
+C
+C         CASORATI 3
+C
+C         P(MU+1,NU,X)*Q(MU,NU,X)-P(MU,NU,X)*Q(MU+1,NU,X)=
+C               GAMMA(NU+MU+1)/(GAMMA(NU-MU+1)*SQRT(1-X**2))
+C
+      IF(DMU.GE.DNU1+1..AND.AMOD(DNU1,1.).EQ.0.) GO TO 750
+      X1=R(I+1)*Q(I)
+      IX1=IR(I+1)+IQ(I)
+      CALL XSADJ(X1,IX1)
+      X2=R(I)*Q(I+1)
+      IX2=IR(I)+IQ(I+1)
+      CALL XSADJ(X2,IX2)
+      CALL XSADD(X1,IX1,-X2,IX2,C2(I),IC2(I))
+C
+C         MULTIPLY BY SQRT(1-X**2) AND THEN DIVIDE BY
+C         (NU+MU),(NU+MU-1),(NU+MU-2),...,(NU-MU+1) SO THAT
+C         CHECK VALUE IS 1.
+C
+      C2(I)=C2(I)*SX
+      K=2*MU
+      IF(K.LE.0) GO TO 750
+      DO 740 J=1,K
+      C2(I)=C2(I)/(DNU1+DMU+1.-(FLOAT(J)))
+  740 CALL XSADJ(C2(I),IC2(I))
+  750 CONTINUE
+C
+C         PLACE RESULTS IN REDUCED FORM.
+C
+  800 DO 810 I=1,LM1
+      CALL XSRED(C1(I),IC1(I))
+      CALL XSRED(C2(I),IC2(I))
+  810 CONTINUE
+      RETURN
+      END
+*DECK XSPMU
+      SUBROUTINE XSPMU(NU1,NU2,MU1,MU2,THETA,X,SX,ID,PQA,IPQA)
+C***BEGIN PROLOGUE  XSPMU
+C***REFER TO  XSLEGF
+C***ROUTINES CALLED  XSADD, XSADJ, XSPQNU
+C***DATE WRITTEN   820728   (YYMMDD)
+C***REVISION DATE  871119   (YYMMDD)
+C***CATEGORY NO.  C3a2,C9
+C***KEYWORDS  LEGENDRE FUNCTIONS
+C***AUTHOR  SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO COMPUTE THE VALUES OF LEGENDRE FUNCTIONS FOR XSLEGF.
+C METHOD: BACKWARD MU-WISE RECURRENCE FOR P(-MU,NU,X) FOR FIXED NU TO
+C         OBTAIN P(-MU2,NU1,X),P(-(MU2-1),NU1,X),....,P(-MU1,NU1,X)
+C         AND STORE IN ASCENDING MU ORDER.
+C***REFERENCES  OLVER AND SMITH,J.COMPUT.PHYSICS,51(1983),N0.3,502-518.
+C***END PROLOGUE  XSPMU
+      REAL PQA,NU1,NU2,P0,X,SX,THETA,X1,X2
+      DIMENSION PQA(*),IPQA(*)
+C
+C        CALL XSPQNU TO OBTAIN P(-MU2,NU,X)
+C
+C***FIRST EXECUTABLE STATEMENT   XSPMU
+      CALL XSPQNU(NU1,NU2,MU2,THETA,ID,PQA,IPQA)
+      P0=PQA(1)
+      IP0=IPQA(1)
+      MU=MU2-1
+C
+C        CALL XSPQNU TO OBTAIN P(-MU2-1,NU,X)
+C
+      CALL XSPQNU(NU1,NU2,MU,THETA,ID,PQA,IPQA)
+      N=MU2-MU1+1
+      PQA(N)=P0
+      IPQA(N)=IP0
+      IF(N.EQ.1) GO TO 300
+      PQA(N-1)=PQA(1)
+      IPQA(N-1)=IPQA(1)
+      IF(N.EQ.2) GO TO 300
+      J=N-2
+  290 CONTINUE
+C
+C        BACKWARD RECURRENCE IN MU TO OBTAIN
+C              P(-MU2,NU1,X),P(-(MU2-1),NU1,X),....P(-MU1,NU1,X)
+C              USING
+C              (NU-MU)*(NU+MU+1.)*P(-(MU+1),NU,X)=
+C                2.*MU*X*SQRT((1./(1.-X**2))*P(-MU,NU,X)-P(-(MU-1),NU,X)
+C
+      X1=2.*(FLOAT(MU))*X*SX*PQA(J+1)
+      X2=-(NU1-(FLOAT(MU)))*(NU1+(FLOAT(MU))+1.)*PQA(J+2)
+      CALL XSADD(X1,IPQA(J+1),X2,IPQA(J+2),PQA(J),IPQA(J))
+      CALL XSADJ(PQA(J),IPQA(J))
+      IF(J.EQ.1) GO TO 300
+      J=J-1
+      MU=MU-1
+      GO TO 290
+  300 RETURN
+      END
+*DECK XSPMUP
+      SUBROUTINE XSPMUP(NU1,NU2,MU1,MU2,PQA,IPQA)
+C***BEGIN PROLOGUE  XSPMUP
+C***REFER TO  XSLEGF
+C***ROUTINES CALLED  XSADJ
+C***DATE WRITTEN   820728   (YYMMDD)
+C***REVISION DATE  871119   (YYMMDD)
+C***CATEGORY NO.  C3a2,C9
+C***KEYWORDS  LEGENDRE FUNCTIONS
+C***AUTHOR  SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO COMPUTE THE VALUES OF LEGENDRE FUNCTIONS FOR XSLEGF.
+C        SUBROUTINE XSPMUP TRANSFORMS AN ARRAY OF LEGENDRE FUNCTIONS
+C        OF THE FIRST KIND OF NEGATIVE ORDER STORED IN ARRAY
+C        PQA INTO LEGENDRE FUNCTIONS OF THE FIRST KIND OF
+C        POSITIVE ORDER  STORED IN ARRAY PQA. THE ORIGINAL
+C        ARRAY IS DESTROYED.
+C***REFERENCES  OLVER AND SMITH,J.COMPUT.PHYSICS,51(1983),N0.3,502-518.
+C***END PROLOGUE  XSPMUP
+      REAL DMU,NU,NU1,NU2,PQA,PROD
+      DIMENSION PQA(*),IPQA(*)
+C***FIRST EXECUTABLE STATEMENT   XSPMUP
+      NU=NU1
+      MU=MU1
+      DMU=(FLOAT(MU))
+      N=IFIX(NU2-NU1+.1)+(MU2-MU1)+1
+      J=1
+      IF(AMOD(NU,1.).NE.0.) GO TO 210
+  200 IF(DMU.LT.NU+1.) GO TO 210
+      PQA(J)=0.
+      IPQA(J)=0
+      J=J+1
+      IF(J.GT.N) RETURN
+C        INCREMENT EITHER MU OR NU AS APPROPRIATE.
+      IF(NU2-NU1.GT..5) NU=NU+1.
+      IF(MU2.GT.MU1) MU=MU+1
+      GO TO 200
+C
+C        TRANSFORM P(-MU,NU,X) TO P(MU,NU,X) USING
+C        P(MU,NU,X)=(NU-MU+1)*(NU-MU+2)*...*(NU+MU)*P(-MU,NU,X)*(-1)**MU
+C
+  210 PROD=1.
+      IPROD=0
+      K=2*MU
+      IF(K.EQ.0) GO TO 222
+      DO 220 L=1,K
+      PROD=PROD*(DMU-NU-(FLOAT(L)))
+  220 CALL XSADJ(PROD,IPROD)
+  222 CONTINUE
+      DO 240 I=J,N
+      IF(MU.EQ.0) GO TO 225
+      PQA(I)=PQA(I)*PROD*(FLOAT((-1)**MU))
+      IPQA(I)=IPQA(I)+IPROD
+      CALL XSADJ(PQA(I),IPQA(I))
+  225 IF(NU2-NU1.GT..5) GO TO 230
+      PROD=(DMU-NU)*PROD*(-DMU-NU-1.)
+      CALL XSADJ(PROD,IPROD)
+      MU=MU+1
+      DMU=DMU+1.
+      GO TO 240
+  230 PROD=PROD*(-DMU-NU-1.)/(DMU-NU-1.)
+      CALL XSADJ(PROD,IPROD)
+      NU=NU+1.
+  240 CONTINUE
+      RETURN
+      END
+*DECK XSPNRM
+      SUBROUTINE XSPNRM(NU1,NU2,MU1,MU2,PQA,IPQA)
+C***BEGIN PROLOGUE  XSPNRM
+C***REFER TO  XSLEGF
+C***ROUTINES CALLED  XSADJ
+C***DATE WRITTEN   820728   (YYMMDD)
+C***REVISION DATE  871119   (YYMMDD)
+C***CATEGORY NO.  C3a2,C9
+C***KEYWORDS  LEGENDRE FUNCTIONS
+C***AUTHOR  SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO COMPUTE THE VALUES OF LEGENDRE FUNCTIONS FOR XSLEGF.
+C        SUBROUTINE XSPNRM TRANSFORMS AN ARRAY OF LEGENDRE
+C        FUNCTIONS OF THE FIRST KIND OF NEGATIVE ORDER STORED
+C        IN ARRAY PQA INTO NORMALIZED LEGENDRE POLYNOMIALS STORED
+C        IN ARRAY PQA. THE ORIGINAL ARRAY IS DESTROYED.
+C***REFERENCES  OLVER AND SMITH,J.COMPUT.PHYSICS,51(1983),N0.3,502-518.
+C***END PROLOGUE  XSPNRM
+      REAL C1,DMU,NU,NU1,NU2,PQA,PROD
+      DIMENSION PQA(*),IPQA(*)
+C***FIRST EXECUTABLE STATEMENT   XSPNRM
+      L=(MU2-MU1)+(NU2-NU1+1.5)
+      MU=MU1
+      DMU=(FLOAT(MU1))
+      NU=NU1
+C
+C         IF MU .GT.NU, NORM P =0.
+C
+      J=1
+  500 IF(DMU.LE.NU) GO TO 505
+      PQA(J)=0.
+      IPQA(J)=0
+      J=J+1
+      IF(J.GT.L) RETURN
+C
+C        INCREMENT EITHER MU OR NU AS APPROPRIATE.
+C
+      IF(MU2.GT.MU1) DMU=DMU+1.
+      IF(NU2-NU1.GT..5) NU=NU+1.
+      GO TO 500
+C
+C         TRANSFORM P(-MU,NU,X) INTO NORMALIZED P(MU,NU,X) USING
+C              NORM P(MU,NU,X)=
+C                 SQRT((NU+.5)*FACTORIAL(NU+MU)/FACTORIAL(NU-MU))
+C                              *P(-MU,NU,X)
+C
+  505 PROD=1.
+      IPROD=0
+      K=2*MU
+      IF(K.LE.0) GO TO 520
+      DO 510 I=1,K
+      PROD=PROD*SQRT(NU+DMU+1.-(FLOAT(I)))
+  510 CALL XSADJ(PROD,IPROD)
+  520 DO 540 I=J,L
+      C1=PROD*SQRT(NU+.5)
+      PQA(I)=PQA(I)*C1
+      IPQA(I)=IPQA(I)+IPROD
+      CALL XSADJ(PQA(I),IPQA(I))
+      IF(NU2-NU1.GT..5) GO TO 530
+      IF(DMU.GE.NU) GO TO 525
+      PROD=SQRT(NU+DMU+1.)*PROD
+      IF(NU.GT.DMU) PROD=PROD*SQRT(NU-DMU)
+      CALL XSADJ(PROD,IPROD)
+      MU=MU+1
+      DMU=DMU+1.
+      GO TO 540
+  525 PROD=0.
+      IPROD=0
+      MU=MU+1
+      DMU=DMU+1.
+      GO TO 540
+  530 PROD=SQRT(NU+DMU+1.)*PROD
+      IF(NU.NE.DMU-1.) PROD=PROD/SQRT(NU-DMU+1.)
+      CALL XSADJ(PROD,IPROD)
+      NU=NU+1.
+  540 CONTINUE
+      RETURN
+      END
+*DECK XSPQNU
+      SUBROUTINE XSPQNU(NU1,NU2,MU,THETA,ID,PQA,IPQA)
+C***BEGIN PROLOGUE  XSPQNU
+C***REFER TO  XSLEGF
+C***ROUTINES CALLED  XSADD, XSADJ, XSPSI
+C***COMMON BLOCKS    XSBLK1
+C***DATE WRITTEN   820728   (YYMMDD)
+C***REVISION DATE  871119   (YYMMDD)
+C***CATEGORY NO.  C3A2,C9
+C***KEYWORDS  LEGENDRE FUNCTIONS
+C***AUTHOR  SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO COMPUTE THE VALUES OF LEGENDRE FUNCTIONS FOR XSLEGF.
+C        SUBROUTINE XSPQNU CALCULATES INITIAL VALUES OF P OR Q
+C        USING POWER SERIES.  THEN XSPQNU PERFORMS FORWARD NU-WISE
+C        RECURRENCE TO OBTAIN P(-MU,NU,X), Q(0,NU,X), OR Q(1,NU,X).
+C        THE FORWARD NU-WISE RECURRENCE IS STABLE FOR P FOR ALL
+C        VALUES OF MU, AND IS STABLE FOR Q FOR MU=0 OR 1.
+C***REFERENCES  OLVER AND SMITH,J.COMPUT.PHYSICS,51(1983),N0.3,502-518.
+C***END PROLOGUE  XSPQNU
+      REAL A,NU,NU1,NU2,PQ,PQA,XSPSI,R,THETA,W,X,X1,X2,XS,
+     1 Y,Z
+      REAL DI,DMU,PQ1,PQ2,FACTMU,FLOK
+      DIMENSION PQA(*),IPQA(*)
+      COMMON /XSBLK1/ NBITSF
+C
+C        J0, IPSIK, AND IPSIX ARE INITIALIZED IN THIS SUBROUTINE.
+C        J0 IS THE NUMBER OF TERMS USED IN SERIES EXPANSION
+C        IN SUBROUTINE XSPQNU.
+C        IPSIK, IPSIX ARE VALUES OF K AND X RESPECTIVELY
+C        USED IN THE CALCULATION OF THE XSPSI FUNCTION.
+C
+C***FIRST EXECUTABLE STATEMENT   XSPQNU
+      J0=NBITSF
+      IPSIK=1+(NBITSF/10)
+      IPSIX=5*IPSIK
+      IPQ=0
+C        FIND NU IN INTERVAL [-.5,.5) IF ID=2  ( CALCULATION OF Q )
+      NU=AMOD(NU1,1.)
+      IF(NU.GE..5) NU=NU-1.
+C        FIND NU IN INTERVAL (-1.5,-.5] IF ID=1,3, OR 4  ( CALCULATION OF P )
+      IF(ID.NE.2.AND.NU.GT.-.5) NU=NU-1.
+C        CALCULATE MU FACTORIAL
+      K=MU
+      DMU=FLOAT(MU)
+      IF(MU.LE.0) GO TO 60
+      FACTMU=1.
+      IF=0
+      DO 50 I=1,K
+      FACTMU=FACTMU*FLOAT(I)
+   50 CALL XSADJ(FACTMU,IF)
+   60 IF(K.EQ.0) FACTMU=1.
+      IF(K.EQ.0) IF=0
+C
+C        X=COS(THETA)
+C        Y=SIN(THETA/2)**2=(1-X)/2=.5-.5*X
+C        R=TAN(THETA/2)=SQRT((1-X)/(1+X)
+C
+      X=COS(THETA)
+      Y=SIN(THETA/2.)**2
+      R=TAN(THETA/2.)
+C
+C        USE ASCENDING SERIES TO CALCULATE TWO VALUES OF P OR Q
+C        FOR USE AS STARTING VALUES IN RECURRENCE RELATION.
+C
+      PQ2=0.0
+      DO 100 J=1,2
+      IPQ1=0
+      IF(ID.EQ.2) GO TO 80
+C
+C        SERIES FOR P ( ID = 1, 3, OR 4 )
+C        P(-MU,NU,X)=1./FACTORIAL(MU)*SQRT(((1.-X)/(1.+X))**MU)
+C                *SUM(FROM 0 TO J0-1)A(J)*(.5-.5*X)**J
+C
+      IPQ=0
+      PQ=1.
+      A=1.
+      IA=0
+      DO 65 I=2,J0
+      DI=FLOAT(I)
+      A=A*Y*(DI-2.-NU)*(DI-1.+NU)/((DI-1.+DMU)*(DI-1.))
+      CALL XSADJ(A,IA)
+      IF(A.EQ.0.) GO TO 66
+      CALL XSADD(PQ,IPQ,A,IA,PQ,IPQ)
+   65 CONTINUE
+   66 CONTINUE
+      IF(MU.LE.0) GO TO 90
+      X2=R
+      X1=PQ
+      K=MU
+      DO 77 I=1,K
+      X1=X1*X2
+   77 CALL XSADJ(X1,IPQ)
+      PQ=X1/FACTMU
+      IPQ=IPQ-IF
+      CALL XSADJ(PQ,IPQ)
+      GO TO 90
+C
+C        Z=-LN(R)=.5*LN((1+X)/(1-X))
+C
+   80 Z=-ALOG(R)
+      W=XSPSI(NU+1.,IPSIK,IPSIX)
+      XS=1./SIN(THETA)
+C
+C        SERIES SUMMATION FOR Q ( ID = 2 )
+C        Q(0,NU,X)=SUM(FROM 0 TO J0-1)((.5*LN((1+X)/(1-X))
+C    +XSPSI(J+1,IPSIK,IPSIX)-XSPSI(NU+1,IPSIK,IPSIX)))*A(J)*(.5-.5*X)**J
+C
+C        Q(1,NU,X)=-SQRT(1./(1.-X**2))+SQRT((1-X)/(1+X))
+C             *SUM(FROM 0 T0 J0-1)(-NU*(NU+1)/2*LN((1+X)/(1-X))
+C                 +(J-NU)*(J+NU+1)/(2*(J+1))+NU*(NU+1)*
+C     (XSPSI(NU+1,IPSIK,IPSIX)-XSPSI(J+1,IPSIK,IPSIX))*A(J)*(.5-.5*X)**J
+C
+C        NOTE, IN THIS LOOP K=J+1
+C
+      PQ=0.
+      IPQ=0
+      IA=0
+      A=1.
+      DO 85 K=1,J0
+      FLOK=FLOAT(K)
+      IF(K.EQ.1) GO TO 81
+      A=A*Y*(FLOK-2.-NU)*(FLOK-1.+NU)/((FLOK-1.+DMU)*(FLOK-1.))
+      CALL XSADJ(A,IA)
+   81 CONTINUE
+      IF(MU.GE.1) GO TO 83
+      X1=(XSPSI(FLOK,IPSIK,IPSIX)-W+Z)*A
+      IX1=IA
+      CALL XSADD(PQ,IPQ,X1,IX1,PQ,IPQ)
+      GO TO 85
+   83 X1=(NU*(NU+1.)*(Z-W+XSPSI(FLOK,IPSIK,IPSIX))+(NU-FLOK+1.)
+     1  *(NU+FLOK)/(2.*K))*A
+      IX1=IA
+      CALL XSADD(PQ,IPQ,X1,IX1,PQ,IPQ)
+   85 CONTINUE
+      IF(MU.GE.1) PQ=-R*PQ
+      IXS=0
+      IF(MU.GE.1) CALL XSADD(PQ,IPQ,-XS,IXS,PQ,IPQ)
+      IF(J.EQ.2) MU=-MU
+      IF(J.EQ.2) DMU=-DMU
+   90 IF(J.EQ.1) PQ2=PQ
+      IF(J.EQ.1) IPQ2=IPQ
+      NU=NU+1.
+  100 CONTINUE
+      K=0
+      IF(NU-1.5.LT.NU1) GO TO 120
+      K=K+1
+      PQA(K)=PQ2
+      IPQA(K)=IPQ2
+      IF(NU.GT.NU2+.5) RETURN
+  120 PQ1=PQ
+      IPQ1=IPQ
+      IF(NU.LT.NU1+.5) GO TO 130
+      K=K+1
+      PQA(K)=PQ
+      IPQA(K)=IPQ
+      IF(NU.GT.NU2+.5) RETURN
+C
+C        FORWARD NU-WISE RECURRENCE FOR F(MU,NU,X) FOR FIXED MU
+C        USING
+C        (NU+MU+1)*F(MU,NU,X)=(2.*NU+1)*F(MU,NU,X)-(NU-MU)*F(MU,NU-1,X)
+C        WHERE F(MU,NU,X) MAY BE P(-MU,NU,X) OR IF MU IS REPLACED
+C        BY -MU THEN F(MU,NU,X) MAY BE Q(MU,NU,X).
+C        NOTE, IN THIS LOOP, NU=NU+1
+C
+  130 X1=(2.*NU-1.)/(NU+DMU)*X*PQ1
+      X2=(NU-1.-DMU)/(NU+DMU)*PQ2
+      CALL XSADD(X1,IPQ1,-X2,IPQ2,PQ,IPQ)
+      CALL XSADJ(PQ,IPQ)
+      NU=NU+1.
+      PQ2=PQ1
+      IPQ2=IPQ1
+      GO TO 120
+C
+C
+      END
+*DECK XSPSI
+      REAL FUNCTION XSPSI(A,IPSIK,IPSIX)
+C***BEGIN PROLOGUE  XSPSI
+C***REFER TO  XSLEGF
+C***ROUTINES CALLED  (NONE)
+C***DATE WRITTEN   820728   (YYMMDD)
+C***REVISION DATE  871119   (YYMMDD)
+C***CATEGORY NO.  C7c
+C***KEYWORDS  PSI FUNCTION
+C***AUTHOR  SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO COMPUTE VALUES OF THE PSI FUNCTION FOR XSLEGF.
+C        FUNCTION PSI(A,IPSIK,IPSIX) RETURNS THE VALUE OF THE
+C        DIGAMMA ( OR PSI ) FUNCTION OF THE ARGUMENT A TO THE
+C        CALLING ROUTINE.
+C***REFERENCES  OLVER AND SMITH,J.COMPUT.PHYSICS,51(1983),N0.3,502-518.
+C***END PROLOGUE  XSPSI
+      REAL A,B,C,CNUM,CDENOM
+      DIMENSION CNUM(12),CDENOM(12)
+C
+C        CNUM(I) AND CDENOM(I) ARE THE ( REDUCED ) NUMERATOR
+C        AND 2*I*DENOMINATOR RESPECTIVELY OF THE 2*I TH BERNOULLI
+C        NUMBER.
+C
+      DATA CNUM(1),CNUM(2),CNUM(3),CNUM(4),CNUM(5),CNUM(6),CNUM(7),
+     1CNUM(8),CNUM(9),CNUM(10),CNUM(11),CNUM(12)
+     2    / 1.,     -1.,    1.,     -1., 1.,
+     3   -691.,  1.,     -3617., 43867., -174611., 77683.,
+     4   -236364091./
+      DATA CDENOM(1),CDENOM(2),CDENOM(3),CDENOM(4),CDENOM(5),CDENOM(6),
+     1 CDENOM(7),CDENOM(8),CDENOM(9),CDENOM(10),CDENOM(11),CDENOM(12)
+     2/12.,120.,   252.,   240.,132.,
+     3  32760., 12.,  8160., 14364., 6600., 276., 65520./
+C***FIRST EXECUTABLE STATEMENT   XSPSI
+      N=MAX0(0,IPSIX-IFIX(A))
+      B=(FLOAT(N))+A
+      K1=IPSIK-1
+C
+C        SERIES EXPANSION FOR A .GT. IPSIX USING IPSIK-1 TERMS.
+C
+      C=0.
+      DO 12 I=1,K1
+      K=IPSIK-I
+   12 C=(C+CNUM(K)/CDENOM(K))/B**2
+      XSPSI=ALOG(B)-(C+.5/B)
+      IF(N.EQ.0) GO TO 20
+      B=0.
+C
+C        RECURRENCE FOR A .LE. IPSIX.
+C
+      DO 15 M=1,N
+   15 B=B+1./((FLOAT(N-M))+A)
+      XSPSI=XSPSI-B
+   20 RETURN
+      END
+*DECK XSQMU
+      SUBROUTINE XSQMU(NU1,NU2,MU1,MU2,THETA,X,SX,ID,PQA,IPQA)
+C***BEGIN PROLOGUE  XSQMU
+C***REFER TO  XSLEGF
+C***ROUTINES CALLED  XSADD, XSADJ, XSPQNU
+C***DATE WRITTEN   820728   (YYMMDD)
+C***REVISION DATE  871119   (YYMMDD)
+C***CATEGORY NO.  C3a2,C9
+C***KEYWORDS  LEGENDRE FUNCTIONS
+C***AUTHOR  SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO COMPUTE THE VALUES OF LEGENDRE FUNCTIONS FOR XSLEGF.
+C METHOD: FORWARD MU-WISE RECURRENCE FOR Q(MU,NU,X) FOR FIXED NU TO
+C         OBTAIN  Q(MU1,NU,X),Q(MU1+1,NU,X),....,Q(MU2,NU,X)
+C***REFERENCES  OLVER AND SMITH,J.COMPUT.PHYSICS,51(1983),N0.3,502-518.
+C***END PROLOGUE  XSQMU
+      DIMENSION PQA(*),IPQA(*)
+      REAL DMU,NU,NU1,NU2,PQ,PQA,PQ1,PQ2,SX,X,X1,X2
+      REAL THETA
+C***FIRST EXECUTABLE STATEMENT   XSQMU
+      MU=0
+C
+C        CALL XSPQNU TO OBTAIN Q(0.,NU1,X)
+C
+      CALL XSPQNU(NU1,NU2,MU,THETA,ID,PQA,IPQA)
+      PQ2=PQA(1)
+      IPQ2=IPQA(1)
+      MU=1
+C
+C        CALL XSPQNU TO OBTAIN Q(1.,NU1,X)
+C
+      CALL XSPQNU(NU1,NU2,MU,THETA,ID,PQA,IPQA)
+      NU=NU1
+      K=0
+      MU=1
+      DMU=1.
+      PQ1=PQA(1)
+      IPQ1=IPQA(1)
+      IF(MU1.GT.0) GO TO 310
+      K=K+1
+      PQA(K)=PQ2
+      IPQA(K)=IPQ2
+      IF(MU2.LT.1) GO TO 330
+  310 IF(MU1.GT.1) GO TO 320
+      K=K+1
+      PQA(K)=PQ1
+      IPQA(K)=IPQ1
+      IF(MU2.LE.1) GO TO 330
+  320 CONTINUE
+C
+C        FORWARD RECURRENCE IN MU TO OBTAIN
+C                  Q(MU1,NU,X),Q(MU1+1,NU,X),....,Q(MU2,NU,X) USING
+C             Q(MU+1,NU,X)=-2.*MU*X*SQRT(1./(1.-X**2))*Q(MU,NU,X)
+C                               -(NU+MU)*(NU-MU+1.)*Q(MU-1,NU,X)
+C
+      X1=-2.*DMU*X*SX*PQ1
+      X2=(NU+DMU)*(NU-DMU+1.)*PQ2
+      CALL XSADD(X1,IPQ1,-X2,IPQ2,PQ,IPQ)
+      CALL XSADJ(PQ,IPQ)
+      PQ2=PQ1
+      IPQ2=IPQ1
+      PQ1=PQ
+      IPQ1=IPQ
+      MU=MU+1
+      DMU=DMU+1.
+      IF(MU.LT.MU1) GO TO 320
+      K=K+1
+      PQA(K)=PQ
+      IPQA(K)=IPQ
+      IF(MU2.GT.MU) GO TO 320
+  330 RETURN
+      END
+*DECK XSQNU
+      SUBROUTINE XSQNU(NU1,NU2,MU1,THETA,X,SX,ID,PQA,IPQA)
+C***BEGIN PROLOGUE  XSQNU
+C***REFER TO  XSLEGF
+C***ROUTINES CALLED  XSADD, XSADJ, XSPQNU
+C***DATE WRITTEN   820728   (YYMMDD)
+C***REVISION DATE  871119   (YYMMDD)
+C***CATEGORY NO.  C3a2,C9
+C***KEYWORDS  LEGENDRE FUNCTIONS
+C***AUTHOR  SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO COMPUTE THE VALUES OF LEGENDRE FUNCTIONS FOR XSLEGF.
+C  METHOD: BACKWARD NU-WISE RECURRENCE FOR Q(MU,NU,X) FOR FIXED MU TO
+C          OBTAIN Q(MU1,NU1,X),Q(MU1,NU1+1,X),....,Q(MU1,NU2,X)
+C***REFERENCES  OLVER AND SMITH,J.COMPUT.PHYSICS,51(1983),N0.3,502-518.
+C***END PROLOGUE  XSQNU
+      DIMENSION PQA(*),IPQA(*)
+      REAL DMU,NU,NU1,NU2,PQ,PQA,PQ1,PQ2,SX,X,X1,X2
+      REAL THETA,PQL1,PQL2
+C***FIRST EXECUTABLE STATEMENT   XSQNU
+      K=0
+      PQ2=0.0
+      IPQ2=0
+      PQL2=0.0
+      IPQL2=0
+      IF(MU1.EQ.1) GO TO 290
+      MU=0
+C
+C        CALL XSPQNU TO OBTAIN Q(0.,NU2,X) AND Q(0.,NU2-1,X)
+C
+      CALL XSPQNU(NU1,NU2,MU,THETA,ID,PQA,IPQA)
+      IF(MU1.EQ.0) RETURN
+      K=(NU2-NU1+1.5)
+      PQ2=PQA(K)
+      IPQ2=IPQA(K)
+      PQL2=PQA(K-1)
+      IPQL2=IPQA(K-1)
+  290 MU=1
+C
+C        CALL XSPQNU TO OBTAIN Q(1.,NU2,X) AND Q(1.,NU2-1,X)
+C
+      CALL XSPQNU(NU1,NU2,MU,THETA,ID,PQA,IPQA)
+      IF(MU1.EQ.1) RETURN
+      NU=NU2
+      PQ1=PQA(K)
+      IPQ1=IPQA(K)
+      PQL1=PQA(K-1)
+      IPQL1=IPQA(K-1)
+  300 MU=1
+      DMU=1.
+  320 CONTINUE
+C
+C        FORWARD RECURRENCE IN MU TO OBTAIN Q(MU1,NU2,X) AND
+C              Q(MU1,NU2-1,X) USING
+C              Q(MU+1,NU,X)=-2.*MU*X*SQRT(1./(1.-X**2))*Q(MU,NU,X)
+C                   -(NU+MU)*(NU-MU+1.)*Q(MU-1,NU,X)
+C
+C              FIRST FOR NU=NU2
+C
+      X1=-2.*DMU*X*SX*PQ1
+      X2=(NU+DMU)*(NU-DMU+1.)*PQ2
+      CALL XSADD(X1,IPQ1,-X2,IPQ2,PQ,IPQ)
+      CALL XSADJ(PQ,IPQ)
+      PQ2=PQ1
+      IPQ2=IPQ1
+      PQ1=PQ
+      IPQ1=IPQ
+      MU=MU+1
+      DMU=DMU+1.
+      IF(MU.LT.MU1) GO TO 320
+      PQA(K)=PQ
+      IPQA(K)=IPQ
+      IF(K.EQ.1) RETURN
+      IF(NU.LT.NU2) GO TO 340
+C
+C              THEN FOR NU=NU2-1
+C
+      NU=NU-1.
+      PQ2=PQL2
+      IPQ2=IPQL2
+      PQ1=PQL1
+      IPQ1=IPQL1
+      K=K-1
+      GO TO 300
+C
+C         BACKWARD RECURRENCE IN NU TO OBTAIN
+C              Q(MU1,NU1,X),Q(MU1,NU1+1,X),....,Q(MU1,NU2,X)
+C              USING
+C              (NU-MU+1.)*Q(MU,NU+1,X)=
+C                       (2.*NU+1.)*X*Q(MU,NU,X)-(NU+MU)*Q(MU,NU-1,X)
+C
+  340 PQ1=PQA(K)
+      IPQ1=IPQA(K)
+      PQ2=PQA(K+1)
+      IPQ2=IPQA(K+1)
+  350 IF(NU.LE.NU1) RETURN
+      K=K-1
+      X1=(2.*NU+1.)*X*PQ1/(NU+DMU)
+      X2=-(NU-DMU+1.)*PQ2/(NU+DMU)
+      CALL XSADD(X1,IPQ1,X2,IPQ2,PQ,IPQ)
+      CALL XSADJ(PQ,IPQ)
+      PQ2=PQ1
+      IPQ2=IPQ1
+      PQ1=PQ
+      IPQ1=IPQ
+      PQA(K)=PQ
+      IPQA(K)=IPQ
+      NU=NU-1.
+      GO TO 350
+      END
+*DECK XDNRMP
+      SUBROUTINE XDNRMP(NU,MU1,MU2,DARG,MODE,DPN,IPN,ISIG)
+C***BEGIN PROLOGUE  XDNRMP
+C***DATE WRITTEN   820712   (YYMMDD)
+C***REVISION DATE  871110   (YYMMDD)
+C***CATEGORY NO.  C3a2,C9
+C***KEYWORDS  LEGENDRE FUNCTIONS
+C***AUTHOR  LOZIER, DANIEL W. (NATIONAL BUREAU OF STANDARDS)
+C           SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO COMPUTE THE NORMALIZED LEGENDRE POLYNOMIAL
+C***DESCRIPTION
+C
+C        SUBROUTINE TO CALCULATE NORMALIZED LEGENDRE POLYNOMIALS
+C        (XSNRMP is single-precision version)
+C        XDNRMP calculates normalized Legendre polynomials of varying
+C        order and fixed argument and degree. The order MU and degree
+C        NU are nonegative integers and the argument is real. Because
+C        the algorithm requires the use of numbers outside the normal
+C        machine range, this subroutine employs a special arithmetic
+C        called extended-range arithmetic. See J.M. Smith, F.W.J. Olver,
+C        and D.W. Lozier, Extended-Range Arithmetic and Normalized
+C        Legendre Polynomials, ACM Transactions on Mathematical Soft-
+C        ware, 93-105, March 1981, for a complete description of the
+C        algorithm and special arithmetic. Also see program comments
+C        in XDSET.
+C
+C        The normalized Legendre polynomials are multiples of the
+C        associated Legendre polynomials of the first kind where the
+C        normalizing coefficients are chosen so as to make the integral
+C        from -1 to 1 of the square of each function equal to 1. See
+C        E. Jahnke, F. Emde and F. Losch, Tables of Higher Functions,
+C        McGraw-Hill, New York, 1960, p. 121.
+C
+C        The input values to XDNRMP are NU, MU1, MU2, DARG, and MODE.
+C        These must satisfy
+C          1. NU .GE. 0 specifies the degree of the normalized Legendre
+C             polynomial that is wanted.
+C          2. MU1 .GE. 0 specifies the lowest-order normalized Legendre
+C             polynomial that is wanted.
+C          3. MU2 .GE. MU1 specifies the highest-order normalized Leg-
+C             endre polynomial that is wanted.
+C         4a. MODE = 1 and -1.0D0 .LE. DARG .LE. 1.0D0 specifies that
+C             Normalized Legendre(NU, MU, DARG) is wanted for MU = MU1,
+C             MU1 + 1, ..., MU2.
+C         4b. MODE = 2 and -3.14159... .LT. DARG .LT. 3.14159... spec-
+C             ifies that Normalized Legendre(NU, MU, DCOS(DARG)) is want-
+C             ed for MU = MU1, MU1 + 1, ..., MU2.
+C
+C        The output of XDNRMP consists of the two vectors DPN and IPN
+C        and the error estimate ISIG. The computed values are stored as
+C        extended-range numbers such that
+C             (DPN(1),IPN(1))=NORMALIZED LEGENDRE(NU,MU1,DX)
+C             (DPN(2),IPN(2))=NORMALIZED LEGENDRE(NU,MU1+1,DX)
+C                .
+C                .
+C             (DPN(K),IPN(K))=NORMALIZED LEGENDRE(NU,MU2,DX)
+C        where K = MU2 - MU1 + 1 and DX = DARG or DCOS(DARG) according
+C        to whether MODE = 1 or 2. Finally, ISIG is an estimate of the
+C        number of decimal digits lost through rounding errors in the
+C        computation. For example if DARG is accurate to 12 significant
+C        decimals, then the computed function values are accurate to
+C        12 - ISIG significant decimals (except in neighborhoods of
+C        zeros).
+C
+C        The interpretation of (DPN(I),IPN(I)) is DPN(I)*(IR**IPN(I))
+C        where IR is the internal radix of the computer arithmetic. When
+C        IPN(I) = 0 the value of the normalized Legendre polynomial is
+C        contained entirely in DPN(I) and subsequent double-precision
+C        computations can be performed without further consideration of
+C        extended-range arithmetic. However, if IPN(I) .NE. 0 the corre-
+C        sponding value of the normalized Legendre polynomial cannot be
+C        represented in double-precision because of overflow or under-
+C        flow. THE USER MUST TEST IPN(I) IN HIS/HER PROGRAM. In the event
+C        that IPN(I) is nonzero, the user could rewrite his/her program
+C        to use extended range arithmetic.
+C
+C
+C
+C        The interpretation of (DPN(I),IPN(I)) can be changed to
+C        DPN(I)*(10**IPN(I)) by calling the extended-range subroutine
+C        XDCON. This should be done before printing the computed values.
+C        As an example of usage, the Fortran coding
+C              J = K
+C              DO 20 I = 1, K
+C              CALL XDCON(DPN(I), IPN(I))
+C              PRINT 10, DPN(I), IPN(I)
+C           10 FORMAT(1X, D30.18 , I15)
+C              IF ((IPN(I) .EQ. 0) .OR. (J .LT. K)) GO TO 20
+C              J = I - 1
+C           20 CONTINUE
+C        will print all computed values and determine the largest J
+C        such that IPN(1) = IPN(2) = ... = IPN(J) = 0. Because of the
+C        change of representation caused by calling XDCON, (DPN(I),
+C        IPN(I)) for I = J+1, J+2, ... cannot be used in subsequent
+C        extended-range computations.
+C
+C***REFERENCES  (SEE DESCRIPTION ABOVE)
+C***ROUTINES CALLED  XERROR, XDADD, XDADJ, XDRED, XDSET
+C***END PROLOGUE  XDNRMP
+      INTEGER NU, MU1, MU2, MODE, IPN, ISIG
+      DOUBLE PRECISION DARG, DPN
+      DIMENSION DPN(*), IPN(*)
+      DOUBLE PRECISION C1,C2,P,P1,P2,P3,S,SX,T,TX,X,DK
+C CALL XDSET TO INITIALIZE EXTENDED-RANGE ARITHMETIC (SEE XDSET
+C LISTING FOR DETAILS)
+C***FIRST EXECUTABLE STATEMENT  XDNRMP
+      CALL XDSET (0, 0, 0.0D0, 0)
+C
+C        TEST FOR PROPER INPUT VALUES.
+C
+      IF (NU.LT.0) GO TO 110
+      IF (MU1.LT.0) GO TO 110
+      IF (MU1.GT.MU2) GO TO 110
+      IF (NU.EQ.0) GO TO 90
+      IF (MODE.LT.1 .OR. MODE.GT.2) GO TO 110
+      GO TO (10, 20), MODE
+   10 IF (DABS(DARG).GT.1.0D0) GO TO 120
+      IF (DABS(DARG).EQ.1.0D0) GO TO 90
+      X = DARG
+      SX = DSQRT((1.0D0+DABS(X))*((0.5D0-DABS(X))+0.5D0))
+      TX = X/SX
+      ISIG = DLOG10(2.0D0*DBLE(FLOAT(NU))*(5.0D0+TX**2))
+      GO TO 30
+   20 IF (DABS(DARG).GT.4.0D0*DATAN(1.0D0)) GO TO 120
+      IF (DARG.EQ.0.0D0) GO TO 90
+      X = DCOS(DARG)
+      SX = DABS(DSIN(DARG))
+      TX = X/SX
+      ISIG = DLOG10(2.0D0*DBLE(FLOAT(NU))*(5.0D0+DABS(DARG*TX)))
+C
+C        BEGIN CALCULATION
+C
+   30 MU = MU2
+      I = MU2 - MU1 + 1
+C
+C        IF MU.GT.NU, NORMALIZED LEGENDRE(NU,MU,X)=0.
+C
+   40 IF (MU.LE.NU) GO TO 50
+      DPN(I) = 0.0D0
+      IPN(I) = 0
+      I = I - 1
+      MU = MU - 1
+      IF (I .GT. 0) GO TO 40
+      ISIG = 0
+      GO TO 160
+   50 MU = NU
+C
+C        P1 = 0. = NORMALIZED LEGENDRE(NU,NU+1,X)
+C
+      P1 = 0.0D0
+      IP1 = 0
+C
+C        CALCULATE P2 = NORMALIZED LEGENDRE(NU,NU,X)
+C
+      P2 = 1.0D0
+      IP2 = 0
+      P3 = 0.5D0
+      DK = 2.0D0
+      DO 60 J=1,NU
+        P3 = ((DK+1.0D0)/DK)*P3
+        P2 = P2*SX
+        CALL XDADJ(P2, IP2)
+        DK = DK + 2.0D0
+   60 CONTINUE
+      P2 = P2*DSQRT(P3)
+      CALL XDADJ(P2, IP2)
+      S = 2.0D0*TX
+      T = 1.0D0/DBLE(FLOAT(NU))
+      IF (MU2.LT.NU) GO TO 70
+      DPN(I) = P2
+      IPN(I) = IP2
+      I = I - 1
+      IF (I .EQ. 0) GO TO 140
+C
+C        RECURRENCE PROCESS
+C
+   70 P = DBLE(FLOAT(MU))*T
+      C1 = 1.0D0/DSQRT((1.0D0-P+T)*(1.0D0+P))
+      C2 = S*P*C1*P2
+      C1 = -DSQRT((1.0D0+P+T)*(1.0D0-P))*C1*P1
+      CALL XDADD(C2, IP2, C1, IP1, P, IP)
+      MU = MU - 1
+      IF (MU.GT.MU2) GO TO 80
+C
+C        STORE IN ARRAY DPN FOR RETURN TO CALLING ROUTINE.
+C
+      DPN(I) = P
+      IPN(I) = IP
+      I = I - 1
+      IF (I .EQ. 0) GO TO 140
+   80 P1 = P2
+      IP1 = IP2
+      P2 = P
+      IP2 = IP
+      IF (MU.LE.MU1) GO TO 140
+      GO TO 70
+C
+C        SPECIAL CASE WHEN X=-1 OR +1, OR NU=0.
+C
+   90 K = MU2 - MU1 + 1
+      DO 100 I=1,K
+        DPN(I) = 0.0D0
+        IPN(I) = 0
+  100 CONTINUE
+      ISIG = 0
+      IF (MU1.GT.0) GO TO 160
+      ISIG = 1
+      DPN(1) = DSQRT(DBLE(FLOAT(NU))+0.5D0)
+      IPN(1) = 0
+      IF (MOD(NU,2).EQ.0) GO TO 160
+      IF (MODE.EQ.1 .AND. DARG.EQ.1.0D0) GO TO 160
+      IF (MODE.EQ.2) GO TO 160
+      DPN(1) = -DPN(1)
+      GO TO 160
+C
+C          ERROR PRINTOUTS AND TERMINATION.
+C
+  110 CALL XERROR('Err in XDNRMP...NU,MU1,MU2 or MODE not valid',44,1,1)
+      GO TO 130
+  120 CALL XERROR('Err in XDNRMP...DARG out of range',33,2,1)
+  130 RETURN
+C
+C        RETURN TO CALLING PROGRAM
+C
+  140 K = MU2 - MU1 + 1
+      DO 150 I=1,K
+        CALL XDRED(DPN(I),IPN(I))
+  150 CONTINUE
+  160 RETURN
+      END
+*DECK XSNRMP
+      SUBROUTINE XSNRMP(NU,MU1,MU2,SARG,MODE,SPN,IPN,ISIG)
+C***BEGIN PROLOGUE  XSNRMP
+C***DATE WRITTEN   820712   (YYMMDD)
+C***REVISION DATE  871110   (YYMMDD)
+C***CATEGORY NO.  C3a2,C9
+C***KEYWORDS  LEGENDRE FUNCTIONS
+C***AUTHOR  LOZIER, DANIEL W. (NATIONAL BUREAU OF STANDARDS)
+C           SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO COMPUTE THE NORMALIZED LEGENDRE POLYNOMIAL
+C***DESCRIPTION
+C
+C        SUBROUTINE TO CALCULATE NORMALIZED LEGENDRE POLYNOMIALS
+C        (XDNRMP is double-precision version)
+C        XSNRMP calculates normalized Legendre polynomials of varying
+C        order and fixed argument and degree. The order MU and degree
+C        NU are nonegative integers and the argument is real. Because
+C        the algorithm requires the use of numbers outside the normal
+C        machine range, this subroutine employs a special arithmetic
+C        called extended-range arithmetic. See J.M. Smith, F.W.J. Olver,
+C        and D.W. Lozier, Extended-Range Arithmetic and Normalized
+C        Legendre Polynomials, ACM Transactions on Mathematical Soft-
+C        ware, 93-105, March 1981, for a complete description of the
+C        algorithm and special arithmetic. Also see program comments
+C        in XSSET.
+C
+C        The normalized Legendre polynomials are multiples of the
+C        associated Legendre polynomials of the first kind where the
+C        normalizing coefficients are chosen so as to make the integral
+C        from -1 to 1 of the square of each function equal to 1. See
+C        E. Jahnke, F. Emde and F. Losch, Tables of Higher Functions,
+C        McGraw-Hill, New York, 1960, p. 121.
+C
+C        The input values to XSNRMP are NU, MU1, MU2, SARG, and MODE.
+C        These must satisfy
+C          1. NU .GE. 0 specifies the degree of the normalized Legendre
+C             polynomial that is wanted.
+C          2. MU1 .GE. 0 specifies the lowest-order normalized Legendre
+C             polynomial that is wanted.
+C          3. MU2 .GE. MU1 specifies the highest-order normalized Leg-
+C             endre polynomial that is wanted.
+C         4a. MODE = 1 and -1.0 .LE. SARG .LE. 1.0 specifies that
+C             Normalized Legendre(NU, MU, SARG) is wanted for MU = MU1,
+C             MU1 + 1, ..., MU2.
+C         4b. MODE = 2 and -3.14159... .LT. SARG .LT. 3.14159... spec-
+C             ifies that Normalized Legendre(NU, MU, COS(SARG)) is want-
+C             ed for MU = MU1, MU1 + 1, ..., MU2.
+C
+C        The output of XSNRMP consists of the two vectors SPN and IPN
+C        and the error estimate ISIG. The computed values are stored as
+C        extended-range numbers such that
+C             (SPN(1),IPN(1))=NORMALIZED LEGENDRE(NU,MU1,X)
+C             (SPN(2),IPN(2))=NORMALIZED LEGENDRE(NU,MU1+1,X)
+C                .
+C                .
+C             (SPN(K),IPN(K))=NORMALIZED LEGENDRE(NU,MU2,X)
+C        where K = MU2 - MU1 + 1 and X = SARG or COS(SARG) according
+C        to whether MODE = 1 or 2. Finally, ISIG is an estimate of the
+C        number of decimal digits lost through rounding errors in the
+C        computation. For example if SARG is accurate to 12 significant
+C        decimals, then the computed function values are accurate to
+C        12 - ISIG significant decimals (except in neighborhoods of
+C        zeros).
+C
+C        The interpretation of (SPN(I),IPN(I)) is SPN(I)*(IR**IPN(I))
+C        where IR is the internal radix of the computer arithmetic. When
+C        IPN(I) = 0 the value of the normalized Legendre polynomial is
+C        contained entirely in SPN(I) and subsequent single-precision
+C        computations can be performed without further consideration of
+C        extended-range arithmetic. However, if IPN(I) .NE. 0 the corre-
+C        sponding value of the normalized Legendre polynomial cannot be
+C        represented in single-precision because of overflow or under-
+C        flow. THE USER MUST TEST IPN(I) IN HIS/HER PROGRAM. In the event
+C        that IPN(I) is nonzero, the user should try using double pre-
+C        cision if it has a wider exponent range. If double precision
+C        fails, the user could rewrite his/her program to use extended-
+C        range arithmetic.
+C
+C        The interpretation of (SPN(I),IPN(I)) can be changed to
+C        SPN(I)*(10**IPN(I)) by calling the extended-range subroutine
+C        XSCON. This should be done before printing the computed values.
+C        As an example of usage, the Fortran coding
+C              J = K
+C              DO 20 I = 1, K
+C              CALL XSCON(SPN(I), IPN(I))
+C              PRINT 10, SPN(I), IPN(I)
+C           10 FORMAT(1X, E30.8 , I15)
+C              IF ((IPN(I) .EQ. 0) .OR. (J .LT. K)) GO TO 20
+C              J = I - 1
+C           20 CONTINUE
+C        will print all computed values and determine the largest J
+C        such that IPN(1) = IPN(2) = ... = IPN(J) = 0. Because of the
+C        change of representation caused by calling XSCON, (SPN(I),
+C        IPN(I)) for I = J+1, J+2, ... cannot be used in subsequent
+C        extended-range computations.
+C
+C***REFERENCES  (SEE DESCRIPTION ABOVE)
+C***ROUTINES CALLED  XERROR, XSADD, XSADJ, XSRED, XSSET
+C***END PROLOGUE  XSNRMP
+      INTEGER NU, MU1, MU2, MODE, IPN, ISIG
+      REAL SARG, SPN
+      DIMENSION SPN(*), IPN(*)
+      REAL C1,C2,P,P1,P2,P3,S,SX,T,TX,X,RK
+C CALL XSSET TO INITIALIZE EXTENDED-RANGE ARITHMETIC (SEE XSSET
+C LISTING FOR DETAILS)
+C***FIRST EXECUTABLE STATEMENT  XSNRMP
+      CALL XSSET (0, 0, 0.0, 0)
+C
+C        TEST FOR PROPER INPUT VALUES.
+C
+      IF (NU.LT.0) GO TO 110
+      IF (MU1.LT.0) GO TO 110
+      IF (MU1.GT.MU2) GO TO 110
+      IF (NU.EQ.0) GO TO 90
+      IF (MODE.LT.1 .OR. MODE.GT.2) GO TO 110
+      GO TO (10, 20), MODE
+   10 IF (ABS(SARG).GT.1.0) GO TO 120
+      IF (ABS(SARG).EQ.1.0) GO TO 90
+      X = SARG
+      SX = SQRT((1.0+ABS(X))*((0.5-ABS(X))+0.5))
+      TX = X/SX
+      ISIG = ALOG10(2.0*(FLOAT(NU))*(5.0+TX**2))
+      GO TO 30
+   20 IF (ABS(SARG).GT.4.0*ATAN(1.0)) GO TO 120
+      IF (SARG.EQ.0.0) GO TO 90
+      X = COS(SARG)
+      SX = ABS(SIN(SARG))
+      TX = X/SX
+      ISIG = ALOG10(2.0*FLOAT(NU)*(5.0+ABS(SARG*TX)))
+C
+C        BEGIN CALCULATION
+C
+   30 MU = MU2
+      I = MU2 - MU1 + 1
+C
+C        IF MU.GT.NU, NORMALIZED LEGENDRE(NU,MU,X)=0.
+C
+   40 IF (MU.LE.NU) GO TO 50
+      SPN(I) = 0.0
+      IPN(I) = 0
+      I = I - 1
+      MU = MU - 1
+      IF (I .GT. 0) GO TO 40
+      ISIG = 0
+      GO TO 160
+   50 MU = NU
+C
+C        P1 = 0. = NORMALIZED LEGENDRE(NU,NU+1,X)
+C
+      P1 = 0.0
+      IP1 = 0
+C
+C        CALCULATE P2 = NORMALIZED LEGENDRE(NU,NU,X)
+C
+      P2 = 1.0
+      IP2 = 0
+      P3 = 0.5
+      RK = 2.0
+      DO 60 J=1,NU
+        P3 = ((RK+1.0)/RK)*P3
+        P2 = P2*SX
+        CALL XSADJ(P2, IP2)
+        RK = RK + 2.0
+   60 CONTINUE
+      P2 = P2*SQRT(P3)
+      CALL XSADJ(P2, IP2)
+      S = 2.0*TX
+      T = 1.0/FLOAT(NU)
+      IF (MU2.LT.NU) GO TO 70
+      SPN(I) = P2
+      IPN(I) = IP2
+      I = I - 1
+      IF (I .EQ. 0) GO TO 140
+C
+C        RECURRENCE PROCESS
+C
+   70 P = FLOAT(MU)*T
+      C1 = 1.0/SQRT((1.0-P+T)*(1.0+P))
+      C2 = S*P*C1*P2
+      C1 = -SQRT((1.0+P+T)*(1.0-P))*C1*P1
+      CALL XSADD(C2, IP2, C1, IP1, P, IP)
+      MU = MU - 1
+      IF (MU.GT.MU2) GO TO 80
+C
+C        STORE IN ARRAY SPN FOR RETURN TO CALLING ROUTINE.
+C
+      SPN(I) = P
+      IPN(I) = IP
+      I = I - 1
+      IF (I .EQ. 0) GO TO 140
+   80 P1 = P2
+      IP1 = IP2
+      P2 = P
+      IP2 = IP
+      IF (MU.LE.MU1) GO TO 140
+      GO TO 70
+C
+C        SPECIAL CASE WHEN X=-1 OR +1, OR NU=0.
+C
+   90 K = MU2 - MU1 + 1
+      DO 100 I=1,K
+        SPN(I) = 0.0
+        IPN(I) = 0
+  100 CONTINUE
+      ISIG = 0
+      IF (MU1.GT.0) GO TO 160
+      ISIG = 1
+      SPN(1) = SQRT(FLOAT(NU)+0.5)
+      IPN(1) = 0
+      IF (MOD(NU,2).EQ.0) GO TO 160
+      IF (MODE.EQ.1 .AND. SARG.EQ.1.0) GO TO 160
+      IF (MODE.EQ.2) GO TO 160
+      SPN(1) = -SPN(1)
+      GO TO 160
+C
+C          ERROR PRINTOUTS AND TERMINATION.
+C
+  110 CALL XERROR('Err in XSNRMP...NU,MU1,MU2 or MODE not valid',44,1,1)
+      GO TO 130
+  120 CALL XERROR('Err in XSNRMP...SARG out of range',33,2,1)
+  130 RETURN
+C
+C        RETURN TO CALLING PROGRAM
+C
+  140 K = MU2 - MU1 + 1
+      DO 150 I=1,K
+        CALL XSRED(SPN(I),IPN(I))
+  150 CONTINUE
+  160 RETURN
+      END
+*DECK XDSET
+      SUBROUTINE XDSET(IRAD,NRADPL,DZERO,NBITS)
+C***BEGIN PROLOGUE  XDSET
+C***DATE WRITTEN   820712   (YYMMDD)
+C***REVISION DATE  871110   (YYMMDD)
+C***CATEGORY NO.  A3d
+C***KEYWORDS  EXTENDED-RANGE DOUBLE-PRECISION ARITHMETIC
+C***AUTHOR  LOZIER, DANIEL W. (NATIONAL BUREAU OF STANDARDS)
+C           SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO PROVIDE DOUBLE-PRECISION FLOATING-POINT ARITHMETIC
+C            WITH AN EXTENDED EXPONENT RANGE
+C***DESCRIPTION
+C
+C   SUBROUTINE  XDSET  MUST BE CALLED PRIOR TO CALLING ANY OTHER
+C EXTENDED-RANGE SUBROUTINE. IT CALCULATES AND STORES SEVERAL
+C MACHINE-DEPENDENT CONSTANTS IN COMMON BLOCKS. THE USER MUST
+C SUPPLY FOUR CONSTANTS THAT PERTAIN TO HIS PARTICULAR COMPUTER.
+C THE CONSTANTS ARE
+C
+C          IRAD = THE INTERNAL BASE OF DOUBLE-PRECISION
+C                 ARITHMETIC IN THE COMPUTER.
+C        NRADPL = THE NUMBER OF RADIX PLACES CARRIED IN
+C                 THE DOUBLE-PRECISION REPRESENTATION.
+C         DZERO = THE SMALLEST OF 1/DMIN, DMAX, DMAXLN WHERE
+C                 DMIN = THE SMALLEST POSITIVE DOUBLE-PRECISION
+C                 NUMBER OR AN UPPER BOUND TO THIS NUMBER,
+C                 DMAX = THE LARGEST DOUBLE-PRECISION NUMBER
+C                 OR A LOWER BOUND TO THIS NUMBER,
+C                 DMAXLN = THE LARGEST DOUBLE-PRECISION NUMBER
+C                 SUCH THAT DLOG10(DMAXLN) CAN BE COMPUTED BY THE
+C                 FORTRAN SYSTEM (ON MOST SYSTEMS DMAXLN = DMAX).
+C         NBITS = THE NUMBER OF BITS (EXCLUSIVE OF SIGN) IN
+C                 AN INTEGER COMPUTER WORD.
+C
+C ALTERNATIVELY, ANY OR ALL OF THE CONSTANTS CAN BE GIVEN
+C THE VALUE 0 (0.0D0 FOR DZERO). IF A CONSTANT IS ZERO, XDSET TRIES
+C TO ASSIGN AN APPROPRIATE VALUE BY CALLING I1MACH
+C (SEE P.A.FOX, A.D.HALL, N.L.SCHRYER, ALGORITHM 528 FRAMEWORK
+C FOR A PORTABLE LIBRARY, ACM TRANSACTIONS ON MATH SOFTWARE,
+C V.4, NO.2, JUNE 1978, 177-188).
+C
+C   THIS IS THE SETTING-UP SUBROUTINE FOR A PACKAGE OF SUBROUTINES
+C THAT FACILITATE THE USE OF EXTENDED-RANGE ARITHMETIC. EXTENDED-RANGE
+C ARITHMETIC ON A PARTICULAR COMPUTER IS DEFINED ON THE SET OF NUMBERS
+C OF THE FORM
+C
+C               (X,IX) = X*RADIX**IX
+C
+C WHERE X IS A DOUBLE-PRECISION NUMBER CALLED THE PRINCIPAL PART,
+C IX IS AN INTEGER CALLED THE AUXILIARY INDEX, AND RADIX IS THE
+C INTERNAL BASE OF THE DOUBLE-PRECISION ARITHMETIC.  OBVIOUSLY,
+C EACH REAL NUMBER IS REPRESENTABLE WITHOUT ERROR BY MORE THAN ONE
+C EXTENDED-RANGE FORM.  CONVERSIONS BETWEEN  DIFFERENT FORMS ARE
+C ESSENTIAL IN CARRYING OUT ARITHMETIC OPERATIONS.  WITH THE CHOICE
+C OF RADIX WE HAVE MADE, AND THE SUBROUTINES WE HAVE WRITTEN, THESE
+C CONVERSIONS ARE PERFORMED WITHOUT ERROR (AT LEAST ON MOST COMPUTERS).
+C (SEE SMITH, J.M., OLVER, F.W.J., AND LOZIER, D.W., EXTENDED-RANGE
+C ARITHMETIC AND NORMALIZED LEGENDRE POLYNOMIALS, ACM TRANSACTIONS ON
+C MATHEMATICAL SOFTWARE, MARCH 1981).
+C
+C   AN EXTENDED-RANGE NUMBER  (X,IX)  IS SAID TO BE IN ADJUSTED FORM IF
+C X AND IX ARE ZERO OR
+C
+C           RADIX**(-L) .LE. DABS(X) .LT. RADIX**L
+C
+C IS SATISFIED, WHERE L IS A COMPUTER-DEPENDENT INTEGER DEFINED IN THIS
+C SUBROUTINE. TWO EXTENDED-RANGE NUMBERS IN ADJUSTED FORM CAN BE ADDED,
+C SUBTRACTED, MULTIPLIED OR DIVIDED (IF THE DIVISOR IS NONZERO) WITHOUT
+C CAUSING OVERFLOW OR UNDERFLOW IN THE PRINCIPAL PART OF THE RESULT.
+C WITH PROPER USE OF THE EXTENDED-RANGE SUBROUTINES, THE ONLY OVERFLOW
+C THAT CAN OCCUR IS INTEGER OVERFLOW IN THE AUXILIARY INDEX. IF THIS
+C IS DETECTED, THE SOFTWARE CALLS XERROR (A GENERAL ERROR-HANDLING
+C FORTRAN SUBROUTINE PACKAGE).
+C
+C   MULTIPLICATION AND DIVISION IS PERFORMED BY SETTING
+C
+C                 (X,IX)*(Y,IY) = (X*Y,IX+IY)
+C OR
+C                 (X,IX)/(Y,IY) = (X/Y,IX-IY).
+C
+C PRE-ADJUSTMENT OF THE OPERANDS IS ESSENTIAL TO AVOID
+C OVERFLOW OR  UNDERFLOW OF THE PRINCIPAL PART. SUBROUTINE
+C XDADJ (SEE BELOW) MAY BE CALLED TO TRANSFORM ANY EXTENDED-
+C RANGE NUMBER INTO ADJUSTED FORM.
+C
+C   ADDITION AND SUBTRACTION REQUIRE THE USE OF SUBROUTINE XDADD
+C (SEE BELOW).  THE INPUT OPERANDS NEED NOT BE IN ADJUSTED FORM.
+C HOWEVER, THE RESULT OF ADDITION OR SUBTRACTION IS RETURNED
+C IN ADJUSTED FORM.  THUS, FOR EXAMPLE, IF (X,IX),(Y,IY),
+C (U,IU),  AND (V,IV) ARE IN ADJUSTED FORM, THEN
+C
+C                 (X,IX)*(Y,IY) + (U,IU)*(V,IV)
+C
+C CAN BE COMPUTED AND STORED IN ADJUSTED FORM WITH NO EXPLICIT
+C CALLS TO XDADJ.
+C
+C   WHEN AN EXTENDED-RANGE NUMBER IS TO BE PRINTED, IT MUST BE
+C CONVERTED TO AN EXTENDED-RANGE FORM WITH DECIMAL RADIX.  SUBROUTINE
+C XDCON IS PROVIDED FOR THIS PURPOSE.
+C
+C   THE SUBROUTINES CONTAINED IN THIS PACKAGE ARE
+C
+C     SUBROUTINE XDADD
+C USAGE
+C                  CALL XDADD(X,IX,Y,IY,Z,IZ)
+C DESCRIPTION
+C                  FORMS THE EXTENDED-RANGE SUM  (Z,IZ) =
+C                  (X,IX) + (Y,IY).  (Z,IZ) IS ADJUSTED
+C                  BEFORE RETURNING. THE INPUT OPERANDS
+C                  NEED NOT BE IN ADJUSTED FORM, BUT THEIR
+C                  PRINCIPAL PARTS MUST SATISFY
+C                  RADIX**(-2L).LE.DABS(X).LE.RADIX**(2L),
+C                  RADIX**(-2L).LE.DABS(Y).LE.RADIX**(2L).
+C
+C     SUBROUTINE XDADJ
+C USAGE
+C                  CALL XDADJ(X,IX)
+C DESCRIPTION
+C                  TRANSFORMS (X,IX) SO THAT
+C                  RADIX**(-L) .LE. DABS(X) .LT. RADIX**L.
+C                  ON MOST COMPUTERS THIS TRANSFORMATION DOES
+C                  NOT CHANGE THE MANTISSA OF X PROVIDED RADIX IS
+C                  THE NUMBER BASE OF DOUBLE-PRECISION ARITHMETIC.
+C
+C     SUBROUTINE XDC210
+C USAGE
+C                  CALL XDC210(K,Z,J)
+C DESCRIPTION
+C                  GIVEN K THIS SUBROUTINE COMPUTES J AND Z
+C                  SUCH THAT  RADIX**K = Z*10**J, WHERE Z IS IN
+C                  THE RANGE 1/10 .LE. Z .LT. 1.
+C                  THE VALUE OF Z WILL BE ACCURATE TO FULL
+C                  DOUBLE-PRECISION PROVIDED THE NUMBER
+C                  OF DECIMAL PLACES IN THE LARGEST
+C                  INTEGER PLUS THE NUMBER OF DECIMAL
+C                  PLACES CARRIED IN DOUBLE-PRECISION DOES NOT
+C                  EXCEED 60. XDC210 IS CALLED BY SUBROUTINE
+C                  XDCON WHEN NECESSARY. THE USER SHOULD
+C                  NEVER NEED TO CALL XDC210 DIRECTLY.
+C
+C     SUBROUTINE XDCON
+C USAGE
+C                  CALL XDCON(X,IX)
+C DESCRIPTION
+C                  CONVERTS (X,IX) = X*RADIX**IX
+C                  TO DECIMAL FORM IN PREPARATION FOR
+C                  PRINTING, SO THAT (X,IX) = X*10**IX
+C                  WHERE 1/10 .LE. DABS(X) .LT. 1
+C                  IS RETURNED, EXCEPT THAT IF
+C                  (DABS(X),IX) IS BETWEEN RADIX**(-2L)
+C                  AND RADIX**(2L) THEN THE REDUCED
+C                  FORM WITH IX = 0 IS RETURNED.
+C
+C     SUBROUTINE XDRED
+C USAGE
+C                  CALL XDRED(X,IX)
+C DESCRIPTION
+C                  IF
+C                  RADIX**(-2L) .LE. (DABS(X),IX) .LE. RADIX**(2L)
+C                  THEN XDRED TRANSFORMS (X,IX) SO THAT IX=0.
+C                  IF (X,IX) IS OUTSIDE THE ABOVE RANGE,
+C                  THEN XDRED TAKES NO ACTION.
+C                  THIS SUBROUTINE IS USEFUL IF THE
+C                  RESULTS OF EXTENDED-RANGE CALCULATIONS
+C                  ARE TO BE USED IN SUBSEQUENT ORDINARY
+C                  DOUBLE-PRECISION CALCULATIONS.
+C
+C***REFERENCES  (SEE DESCRIPTION ABOVE)
+C***ROUTINES CALLED  I1MACH, XERROR
+C***COMMON BLOCKS    XDBLK1, XDBLK2, XDBLK3
+C***END PROLOGUE  XDSET
+      INTEGER IRAD, NRADPL, NBITS
+      DOUBLE PRECISION DZERO, DZEROX
+      COMMON /XDBLK1/ NBITSF
+      SAVE /XDBLK1/
+      DOUBLE PRECISION RADIX, RADIXL, RAD2L, DLG10R
+      INTEGER L, L2, KMAX
+      COMMON /XDBLK2/ RADIX, RADIXL, RAD2L, DLG10R, L, L2, KMAX
+      SAVE /XDBLK2/
+      INTEGER NLG102, MLG102, LG102
+      COMMON /XDBLK3/ NLG102, MLG102, LG102(21)
+      SAVE /XDBLK3/
+      INTEGER IFLAG
+      SAVE IFLAG
+C
+      DIMENSION LOG102(20), LGTEMP(20)
+C
+C   LOG102 CONTAINS THE FIRST 60 DIGITS OF LOG10(2) FOR USE IN
+C CONVERSION OF EXTENDED-RANGE NUMBERS TO BASE 10 .
+      DATA LOG102 /301,029,995,663,981,195,213,738,894,724,493,026,768,
+     * 189,881,462,108,541,310,428/
+C
+C FOLLOWING CODING PREVENTS XDSET FROM BEING EXECUTED MORE THAN ONCE.
+C THIS IS IMPORTANT BECAUSE SOME SUBROUTINES (SUCH AS XDNRMP AND
+C XDLEGF) CALL XDSET TO MAKE SURE EXTENDED-RANGE ARITHMETIC HAS
+C BEEN INITIALIZED. THE USER MAY WANT TO PRE-EMPT THIS CALL, FOR
+C EXAMPLE WHEN I1MACH IS NOT AVAILABLE. SEE CODING BELOW.
+      DATA IFLAG /0/
+C***FIRST EXECUTABLE STATEMENT  XDSET
+      IF (IFLAG .NE. 0) RETURN
+      IFLAG = 1
+      IRADX = IRAD
+      NRDPLC = NRADPL
+      DZEROX = DZERO
+      IMINEX = 0
+      IMAXEX = 0
+      NBITSX = NBITS
+C FOLLOWING 6 STATEMENTS SHOULD BE DELETED IF I1MACH
+C NOT AVAILABLE OR NOT CONFIGURED TO RETURN THE CORRECT
+C MACHINE-DEPENDENT VALUES.
+      IF (IRADX .EQ. 0) IRADX = I1MACH (10)
+      IF (NRDPLC .EQ. 0) NRDPLC = I1MACH (14)
+      IF (DZEROX .EQ. 0.0D0) IMINEX = I1MACH (15)
+      IF (DZEROX .EQ. 0.0D0) IMAXEX = I1MACH (16)
+      IF (NBITSX .EQ. 0) NBITSX = I1MACH (8)
+      IF (IRADX.EQ.2) GO TO 10
+      IF (IRADX.EQ.4) GO TO 10
+      IF (IRADX.EQ.8) GO TO 10
+      IF (IRADX.EQ.16) GO TO 10
+      CALL XERROR('ERR IN XDSET...IMPROPER VALUE OF IRAD',37,1,1)
+      GO TO 100
+   10 CONTINUE
+      LOG2R=0
+      IF (IRADX.EQ.2) LOG2R = 1
+      IF (IRADX.EQ.4) LOG2R = 2
+      IF (IRADX.EQ.8) LOG2R = 3
+      IF (IRADX.EQ.16) LOG2R = 4
+      NBITSF=LOG2R*NRDPLC
+      RADIX = IRADX
+      DLG10R = DLOG10(RADIX)
+      IF (DZEROX .NE. 0.0D0) GO TO 14
+      L = MIN0 ((1-IMINEX)/2, (IMAXEX-1)/2)
+      GO TO 16
+   14 L = 0.5D0*DLOG10(DZEROX)/DLG10R
+C RADIX**(2*L) SHOULD NOT OVERFLOW, BUT REDUCE L BY 1 FOR FURTHER
+C PROTECTION.
+      L=L-1
+   16 L2 = 2*L
+      IF (L.GE.4) GO TO 20
+      CALL XERROR('ERR IN XDSET...IMPROPER VALUE OF DZERO',38,2,1)
+      GO TO 100
+   20 RADIXL = RADIX**L
+      RAD2L = RADIXL**2
+C    IT IS NECESSARY TO RESTRICT NBITS (OR NBITSX) TO BE LESS THAN SOME
+C UPPER LIMIT BECAUSE OF BINARY-TO-DECIMAL CONVERSION. SUCH CONVERSION
+C IS DONE BY XDC210 AND REQUIRES A CONSTANT THAT IS STORED TO SOME FIXED
+C PRECISION. THE CONSTANT THAT IS STORED (LOG102 IN THIS ROUTINE) PROVIDES
+C FOR CONVERSIONS TO BE ACCURATE TO THE LAST DECIMAL DIGIT WHEN THE INTEGER
+C WORD LENGTH DOES NOT EXCEED 63. A LOWER LIMIT OF 15 BITS IS IMPOSED
+C BECAUSE THE SOFTWARE IS DESIGNED TO RUN ON COMPUTERS WITH INTEGER WORD
+C LENGTH OF AT LEAST 16 BITS.
+      IF (15.LE.NBITSX .AND. NBITSX.LE.63) GO TO 30
+      CALL XERROR('ERR IN XDSET...IMPROPER VALUE OF NBITS',38,3,1)
+      GO TO 100
+   30 CONTINUE
+      KMAX = 2**(NBITSX-1) - L2
+      NB = (NBITSX-1)/2
+      MLG102 = 2**NB
+      IF (1.LE.NRDPLC*LOG2R .AND. NRDPLC*LOG2R.LE.120) GO TO 40
+      CALL XERROR('ERR IN XDSET...IMPROPER VALUE OF NRADPL',39,4,1)
+      GO TO 100
+   40 CONTINUE
+      NLG102 = NRDPLC*LOG2R/NB + 3
+      NP1 = NLG102 + 1
+C
+C   AFTER COMPLETION OF THE FOLLOWING LOOP, IC CONTAINS
+C THE INTEGER PART AND LGTEMP CONTAINS THE FRACTIONAL PART
+C OF LOG10(IRADX) IN RADIX 1000.
+      IC = 0
+      DO 50 II=1,20
+        I = 21 - II
+        IT = LOG2R*LOG102(I) + IC
+        IC = IT/1000
+        LGTEMP(I) = MOD(IT,1000)
+   50 CONTINUE
+C
+C   AFTER COMPLETION OF THE FOLLOWING LOOP, LG102 CONTAINS
+C LOG10(IRADX) IN RADIX MLG102. THE RADIX POINT IS
+C BETWEEN LG102(1) AND LG102(2).
+      LG102(1) = IC
+      DO 80 I=2,NP1
+        LG102(I) = 0
+        DO 70 J=1,NB
+          IC = 0
+          DO 60 KK=1,20
+            K = 21 - KK
+            IT = 2*LGTEMP(K) + IC
+            IC = IT/1000
+            LGTEMP(K) = MOD(IT,1000)
+   60     CONTINUE
+          LG102(I) = 2*LG102(I) + IC
+   70   CONTINUE
+   80 CONTINUE
+C
+C CHECK SPECIAL CONDITIONS REQUIRED BY SUBROUTINES...
+      IF (NRDPLC.LT.L) GO TO 90
+      CALL XERROR('ERR IN XDSET...NRADPL .GE. L',28,5,1)
+      GO TO 100
+   90 IF (6*L.LE.KMAX) GO TO 100
+      CALL XERROR('ERR IN XDSET...6*L .GT. KMAX',28,6,1)
+      GO TO 100
+  100 CONTINUE
+      RETURN
+      END
+*DECK XDADD
+      SUBROUTINE XDADD(X,IX,Y,IY,Z,IZ)
+C***BEGIN PROLOGUE  XDADD
+C***DATE WRITTEN   820712   (YYMMDD)
+C***REVISION DATE  831027   (YYMMDD)
+C***CATEGORY NO.  A3d
+C***KEYWORDS  EXTENDED-RANGE DOUBLE-PRECISION ARITHMETIC
+C***AUTHOR  LOZIER, DANIEL W. (NATIONAL BUREAU OF STANDARDS)
+C           SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO PROVIDE DOUBLE-PRECISION FLOATING-POINT ARITHMETIC
+C            WITH AN EXTENDED EXPONENT RANGE
+C***DESCRIPTION
+C     DOUBLE PRECISION X, Y, Z
+C     INTEGER IX, IY, IZ
+C
+C                  FORMS THE EXTENDED-RANGE SUM  (Z,IZ) =
+C                  (X,IX) + (Y,IY).  (Z,IZ) IS ADJUSTED
+C                  BEFORE RETURNING. THE INPUT OPERANDS
+C                  NEED NOT BE IN ADJUSTED FORM, BUT THEIR
+C                  PRINCIPAL PARTS MUST SATISFY
+C                  RADIX**(-2L).LE.ABS(X).LE.RADIX**(2L),
+C                  RADIX**(-2L).LE.ABS(Y).LE.RADIX**(2L).
+C
+C***REFERENCES  (PROGRAM LISTING FOR XDSET)
+C***ROUTINES CALLED  XDADJ
+C***COMMON BLOCKS    XDBLK2
+C***END PROLOGUE  XDADD
+      DOUBLE PRECISION X, Y, Z
+      INTEGER IX, IY, IZ
+      DOUBLE PRECISION RADIX, RADIXL, RAD2L, DLG10R
+      INTEGER L, L2, KMAX
+      COMMON /XDBLK2/ RADIX, RADIXL, RAD2L, DLG10R, L, L2, KMAX
+      SAVE/XDBLK2/
+      DOUBLE PRECISION S, T
+C
+C   THE CONDITIONS IMPOSED ON L AND KMAX BY THIS SUBROUTINE
+C ARE
+C     (1) 1 .LT. L .LE. 0.5D0*LOGR(0.5D0*DZERO)
+C
+C     (2) NRADPL .LT. L .LE. KMAX/6
+C
+C     (3) KMAX .LE. (2**NBITS - 4*L - 1)/2
+C
+C THESE CONDITIONS MUST BE MET BY APPROPRIATE CODING
+C IN SUBROUTINE XDSET.
+C
+C***FIRST EXECUTABLE STATEMENT  XDADD
+      IF (X.NE.0.0D0) GO TO 10
+      Z = Y
+      IZ = IY
+      GO TO 220
+   10 IF (Y.NE.0.0D0) GO TO 20
+      Z = X
+      IZ = IX
+      GO TO 220
+   20 CONTINUE
+      IF (IX.GE.0 .AND. IY.GE.0) GO TO 40
+      IF (IX.LT.0 .AND. IY.LT.0) GO TO 40
+      IF (IABS(IX).LE.6*L .AND. IABS(IY).LE.6*L) GO TO 40
+      IF (IX.GE.0) GO TO 30
+      Z = Y
+      IZ = IY
+      GO TO 220
+   30 CONTINUE
+      Z = X
+      IZ = IX
+      GO TO 220
+   40 I = IX - IY
+      IF (I) 80, 50, 90
+   50 IF (DABS(X).GT.1.0D0 .AND. DABS(Y).GT.1.0D0) GO TO 60
+      IF (DABS(X).LT.1.0D0 .AND. DABS(Y).LT.1.0D0) GO TO 70
+      Z = X + Y
+      IZ = IX
+      GO TO 220
+   60 S = X/RADIXL
+      T = Y/RADIXL
+      Z = S + T
+      IZ = IX + L
+      GO TO 220
+   70 S = X*RADIXL
+      T = Y*RADIXL
+      Z = S + T
+      IZ = IX - L
+      GO TO 220
+   80 S = Y
+      IS = IY
+      T = X
+      GO TO 100
+   90 S = X
+      IS = IX
+      T = Y
+  100 CONTINUE
+C
+C  AT THIS POINT, THE ONE OF (X,IX) OR (Y,IY) THAT HAS THE
+C LARGER AUXILIARY INDEX IS STORED IN (S,IS). THE PRINCIPAL
+C PART OF THE OTHER INPUT IS STORED IN T.
+C
+      I1 = IABS(I)/L
+      I2 = MOD(IABS(I),L)
+      IF (DABS(T).GE.RADIXL) GO TO 130
+      IF (DABS(T).GE.1.0D0) GO TO 120
+      IF (RADIXL*DABS(T).GE.1.0D0) GO TO 110
+      J = I1 + 1
+      T = T*RADIX**(L-I2)
+      GO TO 140
+  110 J = I1
+      T = T*RADIX**(-I2)
+      GO TO 140
+  120 J = I1 - 1
+      IF (J.LT.0) GO TO 110
+      T = T*RADIX**(-I2)/RADIXL
+      GO TO 140
+  130 J = I1 - 2
+      IF (J.LT.0) GO TO 120
+      T = T*RADIX**(-I2)/RAD2L
+  140 CONTINUE
+C
+C  AT THIS POINT, SOME OR ALL OF THE DIFFERENCE IN THE
+C AUXILIARY INDICES HAS BEEN USED TO EFFECT A LEFT SHIFT
+C OF T.  THE SHIFTED VALUE OF T SATISFIES
+C
+C       RADIX**(-2*L) .LE. DABS(T) .LE. 1.0D0
+C
+C AND, IF J=0, NO FURTHER SHIFTING REMAINS TO BE DONE.
+C
+      IF (J.EQ.0) GO TO 190
+      IF (DABS(S).GE.RADIXL .OR. J.GT.3) GO TO 150
+      IF (DABS(S).GE.1.0D0) GO TO (180, 150, 150), J
+      IF (RADIXL*DABS(S).GE.1.0D0) GO TO (180, 170, 150), J
+      GO TO (180, 170, 160), J
+  150 Z = S
+      IZ = IS
+      GO TO 220
+  160 S = S*RADIXL
+  170 S = S*RADIXL
+  180 S = S*RADIXL
+  190 CONTINUE
+C
+C   AT THIS POINT, THE REMAINING DIFFERENCE IN THE
+C AUXILIARY INDICES HAS BEEN USED TO EFFECT A RIGHT SHIFT
+C OF S.  IF THE SHIFTED VALUE OF S WOULD HAVE EXCEEDED
+C RADIX**L, THEN (S,IS) IS RETURNED AS THE VALUE OF THE
+C SUM.
+C
+      IF (DABS(S).GT.1.0D0 .AND. DABS(T).GT.1.0D0) GO TO 200
+      IF (DABS(S).LT.1.0D0 .AND. DABS(T).LT.1.0D0) GO TO 210
+      Z = S + T
+      IZ = IS - J*L
+      GO TO 220
+  200 S = S/RADIXL
+      T = T/RADIXL
+      Z = S + T
+      IZ = IS - J*L + L
+      GO TO 220
+  210 S = S*RADIXL
+      T = T*RADIXL
+      Z = S + T
+      IZ = IS - J*L - L
+  220 CALL XDADJ(Z, IZ)
+      RETURN
+      END
+*DECK XDADJ
+      SUBROUTINE XDADJ(X,IX)
+C***BEGIN PROLOGUE  XDADJ
+C***DATE WRITTEN   820712   (YYMMDD)
+C***REVISION DATE  831027   (YYMMDD)
+C***CATEGORY NO.  A3d
+C***KEYWORDS  EXTENDED-RANGE DOUBLE-PRECISION ARITHMETIC
+C***AUTHOR  LOZIER, DANIEL W. (NATIONAL BUREAU OF STANDARDS)
+C           SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO PROVIDE DOUBLE-PRECISION FLOATING-POINT ARITHMETIC
+C            WITH AN EXTENDED EXPONENT RANGE
+C***DESCRIPTION
+C     DOUBLE PRECISION X
+C     INTEGER IX
+C
+C                  TRANSFORMS (X,IX) SO THAT
+C                  RADIX**(-L) .LE. DABS(X) .LT. RADIX**L.
+C                  ON MOST COMPUTERS THIS TRANSFORMATION DOES
+C                  NOT CHANGE THE MANTISSA OF X PROVIDED RADIX IS
+C                  THE NUMBER BASE OF DOUBLE-PRECISION ARITHMETIC.
+C
+C***REFERENCES  (PROGRAM LISTING FOR XDSET)
+C***ROUTINES CALLED  XERROR
+C***COMMON BLOCKS    XDBLK2
+C***END PROLOGUE  XDADJ
+      DOUBLE PRECISION X
+      INTEGER IX
+      DOUBLE PRECISION RADIX, RADIXL, RAD2L, DLG10R
+      INTEGER L, L2, KMAX
+      COMMON /XDBLK2/ RADIX, RADIXL, RAD2L, DLG10R, L, L2, KMAX
+      SAVE /XDBLK2/
+C
+C   THE CONDITION IMPOSED ON L AND KMAX BY THIS SUBROUTINE
+C IS
+C     2*L .LE. KMAX
+C
+C THIS CONDITION MUST BE MET BY APPROPRIATE CODING
+C IN SUBROUTINE XDSET.
+C
+C***FIRST EXECUTABLE STATEMENT  XDADJ
+      IF (X.EQ.0.0D0) GO TO 50
+      IF (DABS(X).GE.1.0D0) GO TO 20
+      IF (RADIXL*DABS(X).GE.1.0D0) GO TO 60
+      X = X*RAD2L
+      IF (IX.LT.0) GO TO 10
+      IX = IX - L2
+      GO TO 70
+   10 IF (IX.LT.-KMAX+L2) GO TO 40
+      IX = IX - L2
+      GO TO 70
+   20 IF (DABS(X).LT.RADIXL) GO TO 60
+      X = X/RAD2L
+      IF (IX.GT.0) GO TO 30
+      IX = IX + L2
+      GO TO 70
+   30 IF (IX.GT.KMAX-L2) GO TO 40
+      IX = IX + L2
+      GO TO 70
+   40 CALL XERROR('Err in XDADJ...overflow in auxiliary index',42,1,1)
+      RETURN
+   50 IX = 0
+   60 IF (IABS(IX).GT.KMAX) GO TO 40
+   70 RETURN
+      END
+*DECK XDCON
+      SUBROUTINE XDCON(X,IX)
+C***BEGIN PROLOGUE  XDCON
+C***DATE WRITTEN   820712   (YYMMDD)
+C***REVISION DATE  831027   (YYMMDD)
+C***CATEGORY NO.  A3d
+C***KEYWORDS  EXTENDED-RANGE DOUBLE-PRECISION ARITHMETIC
+C***AUTHOR  LOZIER, DANIEL W. (NATIONAL BUREAU OF STANDARDS)
+C           SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO PROVIDE DOUBLE-PRECISION FLOATING-POINT ARITHMETIC
+C            WITH AN EXTENDED EXPONENT RANGE
+C***DESCRIPTION
+C     DOUBLE PRECISION X
+C     INTEGER IX
+C
+C                  CONVERTS (X,IX) = X*RADIX**IX
+C                  TO DECIMAL FORM IN PREPARATION FOR
+C                  PRINTING, SO THAT (X,IX) = X*10**IX
+C                  WHERE 1/10 .LE. ABS(X) .LT. 1
+C                  IS RETURNED, EXCEPT THAT IF
+C                  (DABS(X),IX) IS BETWEEN RADIX**(-2L)
+C                  AND RADIX**(2L) THEN THE REDUCED
+C                  FORM WITH IX = 0 IS RETURNED.
+C
+C***REFERENCES (PROGRAM LISTING FOR XDSET)
+C***ROUTINES CALLED  XDADJ, XDC210, XDRED
+C***COMMON BLOCKS    XDBLK2
+C***END PROLOGUE  XDCON
+      DOUBLE PRECISION X
+      INTEGER IX
+C
+C   THE CONDITIONS IMPOSED ON L AND KMAX BY THIS SUBROUTINE
+C ARE
+C    (1) 4 .LE. L .LE. 2**NBITS - 1 - KMAX
+C
+C    (2) KMAX .LE. ((2**NBITS)-2)/LOG10R - L
+C
+C THESE CONDITIONS MUST BE MET BY APPROPRIATE CODING
+C IN SUBROUTINE XDSET.
+C
+      DOUBLE PRECISION RADIX, RADIXL, RAD2L, DLG10R
+      INTEGER L, L2, KMAX
+      COMMON /XDBLK2/ RADIX, RADIXL, RAD2L, DLG10R, L, L2, KMAX
+      SAVE /XDBLK2/
+C
+      DOUBLE PRECISION A, B, Z
+C
+      DATA ISPACE /1/
+C   THE PARAMETER ISPACE IS THE INCREMENT USED IN FORM-
+C ING THE AUXILIARY INDEX OF THE DECIMAL EXTENDED-RANGE
+C FORM. THE RETURNED VALUE OF IX WILL BE AN INTEGER MULT-
+C IPLE OF ISPACE. ISPACE MUST SATISFY 1 .LE. ISPACE .LE.
+C L/2. IF A VALUE GREATER THAN 1 IS TAKEN, THE RETURNED
+C VALUE OF X WILL SATISFY 10**(-ISPACE) .LE. DABS(X) .LE. 1
+C WHEN (DABS(X),IX) .LT. RADIX**(-2L), AND 1/10 .LE. DABS(X)
+C .LT. 10**(ISPACE-1) WHEN (DABS(X),IX) .GT. RADIX**(2L).
+C
+C***FIRST EXECUTABLE STATEMENT  XDCON
+      CALL XDRED(X, IX)
+      IF (IX.EQ.0) GO TO 150
+      CALL XDADJ(X, IX)
+C
+C CASE 1 IS WHEN (X,IX) IS LESS THAN RADIX**(-2L) IN MAGNITUDE,
+C CASE 2 IS WHEN (X,IX) IS GREATER THAN RADIX**(2L) IN MAGNITUDE.
+      ITEMP = 1
+      ICASE = (3+ISIGN(ITEMP,IX))/2
+      GO TO (10, 20), ICASE
+   10 IF (DABS(X).LT.1.0D0) GO TO 30
+      X = X/RADIXL
+      IX = IX + L
+      GO TO 30
+   20 IF (DABS(X).GE.1.0D0) GO TO 30
+      X = X*RADIXL
+      IX = IX - L
+   30 CONTINUE
+C
+C AT THIS POINT, RADIX**(-L) .LE. DABS(X) .LT. 1.0D0     IN CASE 1,
+C                      1.0D0 .LE. DABS(X) .LT. RADIX**L  IN CASE 2.
+      I = DLOG10(DABS(X))/DLG10R
+      A = RADIX**I
+      GO TO (40, 60), ICASE
+   40 IF (A.LE.RADIX*DABS(X)) GO TO 50
+      I = I - 1
+      A = A/RADIX
+      GO TO 40
+   50 IF (DABS(X).LT.A) GO TO 80
+      I = I + 1
+      A = A*RADIX
+      GO TO 50
+   60 IF (A.LE.DABS(X)) GO TO 70
+      I = I - 1
+      A = A/RADIX
+      GO TO 60
+   70 IF (DABS(X).LT.RADIX*A) GO TO 80
+      I = I + 1
+      A = A*RADIX
+      GO TO 70
+   80 CONTINUE
+C
+C AT THIS POINT I IS SUCH THAT
+C RADIX**(I-1) .LE. DABS(X) .LT. RADIX**I      IN CASE 1,
+C     RADIX**I .LE. DABS(X) .LT. RADIX**(I+1)  IN CASE 2.
+      ITEMP = DBLE(FLOAT(ISPACE))/DLG10R
+      A = RADIX**ITEMP
+      B = 10.0D0**ISPACE
+   90 IF (A.LE.B) GO TO 100
+      ITEMP = ITEMP - 1
+      A = A/RADIX
+      GO TO 90
+  100 IF (B.LT.A*RADIX) GO TO 110
+      ITEMP = ITEMP + 1
+      A = A*RADIX
+      GO TO 100
+  110 CONTINUE
+C
+C AT THIS POINT ITEMP IS SUCH THAT
+C RADIX**ITEMP .LE. 10**ISPACE .LT. RADIX**(ITEMP+1).
+      IF (ITEMP.GT.0) GO TO 120
+C ITEMP = 0 IF, AND ONLY IF, ISPACE = 1 AND RADIX = 16.0D0
+      X = X*RADIX**(-I)
+      IX = IX + I
+      CALL XDC210(IX, Z, J)
+      X = X*Z
+      IX = J
+      GO TO (130, 140), ICASE
+  120 CONTINUE
+      I1 = I/ITEMP
+      X = X*RADIX**(-I1*ITEMP)
+      IX = IX + I1*ITEMP
+C
+C AT THIS POINT,
+C RADIX**(-ITEMP) .LE. DABS(X) .LT. 1.0D0        IN CASE 1,
+C           1.0D0 .LE. DABS(X) .LT. RADIX**ITEMP IN CASE 2.
+      CALL XDC210(IX, Z, J)
+      J1 = J/ISPACE
+      J2 = J - J1*ISPACE
+      X = X*Z*10.0D0**J2
+      IX = J1*ISPACE
+C
+C AT THIS POINT,
+C  10.0D0**(-2*ISPACE) .LE. DABS(X) .LT. 1.0D0                IN CASE 1,
+C           10.0D0**-1 .LE. DABS(X) .LT. 10.0D0**(2*ISPACE-1) IN CASE 2.
+      GO TO (130, 140), ICASE
+  130 IF (B*DABS(X).GE.1.0D0) GO TO 150
+      X = X*B
+      IX = IX - ISPACE
+      GO TO 130
+  140 IF (10.0D0*DABS(X).LT.B) GO TO 150
+      X = X/B
+      IX = IX + ISPACE
+      GO TO 140
+  150 RETURN
+      END
+*DECK XDC210
+      SUBROUTINE XDC210(K, Z, J)
+C***BEGIN PROLOGUE  XDC210
+C***DATE WRITTEN   820712   (YYMMDD)
+C***REVISION DATE  831027   (YYMMDD)
+C***CATEGORY NO.  A3d
+C***KEYWORDS  EXTENDED-RANGE DOUBLE-PRECISION ARITHMETIC
+C***AUTHOR  LOZIER, DANIEL W. (NATIONAL BUREAU OF STANDARDS)
+C           SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO PROVIDE DOUBLE-PRECISION FLOATING-POINT ARITHMETIC
+C            WITH AN EXTENDED EXPONENT RANGE
+C***DESCRIPTION
+C     INTEGER K, J
+C     DOUBLE PRECISION Z
+C
+C                  GIVEN K THIS SUBROUTINE COMPUTES J AND Z
+C                  SUCH THAT  RADIX**K = Z*10**J, WHERE Z IS IN
+C                  THE RANGE 1/10 .LE. Z .LT. 1.
+C                  THE VALUE OF Z WILL BE ACCURATE TO FULL
+C                  DOUBLE-PRECISION PROVIDED THE NUMBER
+C                  OF DECIMAL PLACES IN THE LARGEST
+C                  INTEGER PLUS THE NUMBER OF DECIMAL
+C                  PLACES CARRIED IN DOUBLE-PRECISION DOES NOT
+C                  EXCEED 60. XDC210 IS CALLED BY SUBROUTINE
+C                  XDCON WHEN NECESSARY. THE USER SHOULD
+C                  NEVER NEED TO CALL XDC210 DIRECTLY.
+C
+C***REFERENCES  (PROGRAM LISTING FOR XDSET)
+C***ROUTINES CALLED  XERROR
+C***COMMON BLOCKS    XDBLK3
+C***END PROLOGUE  XDC210
+      DOUBLE PRECISION Z
+      INTEGER K, J
+      INTEGER NLG102, MLG102, LG102
+      COMMON /XDBLK3/ NLG102, MLG102, LG102(21)
+      SAVE /XDBLK3/
+C
+C   THE CONDITIONS IMPOSED ON NLG102, MLG102, AND LG102 BY
+C THIS SUBROUTINE ARE
+C
+C     (1) NLG102 .GE. 2
+C
+C     (2) MLG102 .GE. 1
+C
+C     (3) 2*MLG102*(MLG102 - 1) .LE. 2**NBITS - 1
+C
+C THESE CONDITIONS MUST BE MET BY APPROPRIATE CODING
+C IN SUBROUTINE XDSET.
+C
+C***FIRST EXECUTABLE STATEMENT  XDC210
+      IF (K.EQ.0) GO TO 70
+      M = MLG102
+      KA = IABS(K)
+      KA1 = KA/M
+      KA2 = MOD(KA,M)
+      IF (KA1.GE.M) GO TO 60
+      NM1 = NLG102 - 1
+      NP1 = NLG102 + 1
+      IT = KA2*LG102(NP1)
+      IC = IT/M
+      ID = MOD(IT,M)
+      Z = ID
+      IF (KA1.GT.0) GO TO 20
+      DO 10 II=1,NM1
+        I = NP1 - II
+        IT = KA2*LG102(I) + IC
+        IC = IT/M
+        ID = MOD(IT,M)
+        Z = Z/DBLE(FLOAT(M)) + DBLE(FLOAT(ID))
+   10 CONTINUE
+      JA = KA*LG102(1) + IC
+      GO TO 40
+   20 CONTINUE
+      DO 30 II=1,NM1
+        I = NP1 - II
+        IT = KA2*LG102(I) + KA1*LG102(I+1) + IC
+        IC = IT/M
+        ID = MOD(IT,M)
+        Z = Z/DBLE(FLOAT(M)) + DBLE(FLOAT(ID))
+   30 CONTINUE
+      JA = KA*LG102(1) + KA1*LG102(2) + IC
+   40 CONTINUE
+      Z = Z/DBLE(FLOAT(M))
+      IF (K.GT.0) GO TO 50
+      J = -JA
+      Z = 10.0D0**(-Z)
+      GO TO 80
+   50 CONTINUE
+      J = JA + 1
+      Z = 10.0D0**(Z-1.0D0)
+      GO TO 80
+   60 CONTINUE
+C   THIS ERROR OCCURS IF K EXCEEDS  MLG102**2 - 1  IN MAGNITUDE.
+C
+      CALL XERROR('Err in XDC210...K too large',27,1,1)
+      RETURN
+   70 CONTINUE
+      J = 0
+      Z = 1.0D0
+   80 RETURN
+      END
+*DECK XDRED
+      SUBROUTINE XDRED(X,IX)
+C***BEGIN PROLOGUE  XDRED
+C***DATE WRITTEN   820712   (YYMMDD)
+C***REVISION DATE  831027   (YYMMDD)
+C***CATEGORY NO.  A3d
+C***KEYWORDS  EXTENDED-RANGE DOUBLE-PRECISION ARITHMETIC
+C***AUTHOR  LOZIER, DANIEL W. (NATIONAL BUREAU OF STANDARDS)
+C           SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO PROVIDE DOUBLE-PRECISION FLOATING-POINT ARITHMETIC
+C            WITH AN EXTENDED EXPONENT RANGE
+C***DESCRIPTION
+C     DOUBLE PRECISION X
+C     INTEGER IX
+C
+C                  IF
+C                  RADIX**(-2L) .LE. (DABS(X),IX) .LE. RADIX**(2L)
+C                  THEN XDRED TRANSFORMS (X,IX) SO THAT IX=0.
+C                  IF (X,IX) IS OUTSIDE THE ABOVE RANGE,
+C                  THEN XDRED TAKES NO ACTION.
+C                  THIS SUBROUTINE IS USEFUL IF THE
+C                  RESULTS OF EXTENDED-RANGE CALCULATIONS
+C                  ARE TO BE USED IN SUBSEQUENT ORDINARY
+C                  DOUBLE-PRECISION CALCULATIONS.
+C
+C***REFERENCES  (PROGRAM LISTING FOR XDSET)
+C***ROUTINES CALLED  (NONE)
+C***COMMON BLOCKS    XDBLK2
+C***END PROLOGUE  XDRED
+      DOUBLE PRECISION X
+      INTEGER IX
+      DOUBLE PRECISION RADIX, RADIXL, RAD2L, DLG10R, XA
+      INTEGER L, L2, KMAX
+      COMMON /XDBLK2/ RADIX, RADIXL, RAD2L, DLG10R, L, L2, KMAX
+      SAVE /XDBLK2/
+C
+C***FIRST EXECUTABLE STATEMENT  XDRED
+      IF (X.EQ.0.0D0) GO TO 90
+      XA = DABS(X)
+      IF (IX.EQ.0) GO TO 70
+      IXA = IABS(IX)
+      IXA1 = IXA/L2
+      IXA2 = MOD(IXA,L2)
+      IF (IX.GT.0) GO TO 40
+   10 CONTINUE
+      IF (XA.GT.1.0D0) GO TO 20
+      XA = XA*RAD2L
+      IXA1 = IXA1 + 1
+      GO TO 10
+   20 XA = XA/RADIX**IXA2
+      IF (IXA1.EQ.0) GO TO 70
+      DO 30 I=1,IXA1
+        IF (XA.LT.1.0D0) GO TO 100
+        XA = XA/RAD2L
+   30 CONTINUE
+      GO TO 70
+C
+   40 CONTINUE
+      IF (XA.LT.1.0D0) GO TO 50
+      XA = XA/RAD2L
+      IXA1 = IXA1 + 1
+      GO TO 40
+   50 XA = XA*RADIX**IXA2
+      IF (IXA1.EQ.0) GO TO 70
+      DO 60 I=1,IXA1
+        IF (XA.GT.1.0D0) GO TO 100
+        XA = XA*RAD2L
+   60 CONTINUE
+   70 IF (XA.GT.RAD2L) GO TO 100
+      IF (XA.GT.1.0D0) GO TO 80
+      IF (RAD2L*XA.LT.1.0D0) GO TO 100
+   80 X = DSIGN(XA,X)
+   90 IX = 0
+  100 RETURN
+      END
+*DECK XSSET
+      SUBROUTINE XSSET(IRAD,NRADPL,DZERO,NBITS)
+C***BEGIN PROLOGUE  XSSET
+C***DATE WRITTEN   820712   (YYMMDD)
+C***REVISION DATE  871110   (YYMMDD)
+C***CATEGORY NO.  A3d
+C***KEYWORDS  EXTENDED-RANGE SINGLE-PRECISION ARITHMETIC
+C***AUTHOR  LOZIER, DANIEL W. (NATIONAL BUREAU OF STANDARDS)
+C           SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO PROVIDE SINGLE-PRECISION FLOATING-POINT ARITHMETIC
+C            WITH AN EXTENDED EXPONENT RANGE
+C***DESCRIPTION
+C
+C   SUBROUTINE  XSSET  MUST BE CALLED PRIOR TO CALLING ANY OTHER
+C EXTENDED-RANGE SUBROUTINE. IT CALCULATES AND STORES SEVERAL
+C MACHINE-DEPENDENT CONSTANTS IN COMMON BLOCKS. THE USER MUST
+C SUPPLY FOUR CONSTANTS THAT PERTAIN TO HIS PARTICULAR COMPUTER.
+C THE CONSTANTS ARE
+C
+C          IRAD = THE INTERNAL BASE OF SINGLE-PRECISION
+C                 ARITHMETIC IN THE COMPUTER.
+C        NRADPL = THE NUMBER OF RADIX PLACES CARRIED IN
+C                 THE SINGLE-PRECISION REPRESENTATION.
+C         DZERO = THE SMALLEST OF 1/DMIN, DMAX, DMAXLN WHERE
+C                 DMIN = THE SMALLEST POSITIVE SINGLE-PRECISION
+C                 NUMBER OR AN UPPER BOUND TO THIS NUMBER,
+C                 DMAX = THE LARGEST SINGLE-PRECISION NUMBER
+C                 OR A LOWER BOUND TO THIS NUMBER,
+C                 DMAXLN = THE LARGEST SINGLE-PRECISION NUMBER
+C                 SUCH THAT ALOG10(DMAXLN) CAN BE COMPUTED BY THE
+C                 FORTRAN SYSTEM (ON MOST SYSTEMS DMAXLN = DMAX).
+C         NBITS = THE NUMBER OF BITS (EXCLUSIVE OF SIGN) IN
+C                 AN INTEGER COMPUTER WORD.
+C
+C ALTERNATIVELY, ANY OR ALL OF THE CONSTANTS CAN BE GIVEN
+C THE VALUE 0 (0.0 FOR DZERO). IF A CONSTANT IS ZERO, XSSET TRIES
+C TO ASSIGN AN APPROPRIATE VALUE BY CALLING I1MACH
+C (SEE P.A.FOX, A.D.HALL, N.L.SCHRYER, ALGORITHM 528 FRAMEWORK
+C FOR A PORTABLE LIBRARY, ACM TRANSACTIONS ON MATH SOFTWARE,
+C V.4, NO.2, JUNE 1978, 177-188).
+C
+C   THIS IS THE SETTING-UP SUBROUTINE FOR A PACKAGE OF SUBROUTINES
+C THAT FACILITATE THE USE OF EXTENDED-RANGE ARITHMETIC. EXTENDED-RANGE
+C ARITHMETIC ON A PARTICULAR COMPUTER IS DEFINED ON THE SET OF NUMBERS
+C OF THE FORM
+C
+C               (X,IX) = X*RADIX**IX
+C
+C WHERE X IS A SINGLE-PRECISION NUMBER CALLED THE PRINCIPAL PART,
+C IX IS AN INTEGER CALLED THE AUXILIARY INDEX, AND RADIX IS THE
+C INTERNAL BASE OF THE SINGLE-PRECISION ARITHMETIC.  OBVIOUSLY,
+C EACH REAL NUMBER IS REPRESENTABLE WITHOUT ERROR BY MORE THAN ONE
+C EXTENDED-RANGE FORM.  CONVERSIONS BETWEEN  DIFFERENT FORMS ARE
+C ESSENTIAL IN CARRYING OUT ARITHMETIC OPERATIONS.  WITH THE CHOICE
+C OF RADIX WE HAVE MADE, AND THE SUBROUTINES WE HAVE WRITTEN, THESE
+C CONVERSIONS ARE PERFORMED WITHOUT ERROR (AT LEAST ON MOST COMPUTERS).
+C (SEE SMITH, J.M., OLVER, F.W.J., AND LOZIER, D.W., EXTENDED-RANGE
+C ARITHMETIC AND NORMALIZED LEGENDRE POLYNOMIALS, ACM TRANSACTIONS ON
+C MATHEMATICAL SOFTWARE, MARCH 1981).
+C
+C   AN EXTENDED-RANGE NUMBER  (X,IX)  IS SAID TO BE IN ADJUSTED FORM IF
+C X AND IX ARE ZERO OR
+C
+C           RADIX**(-L) .LE. ABS(X) .LT. RADIX**L
+C
+C IS SATISFIED, WHERE L IS A COMPUTER-DEPENDENT INTEGER DEFINED IN THIS
+C SUBROUTINE. TWO EXTENDED-RANGE NUMBERS IN ADJUSTED FORM CAN BE ADDED,
+C SUBTRACTED, MULTIPLIED OR DIVIDED (IF THE DIVISOR IS NONZERO) WITHOUT
+C CAUSING OVERFLOW OR UNDERFLOW IN THE PRINCIPAL PART OF THE RESULT.
+C WITH PROPER USE OF THE EXTENDED-RANGE SUBROUTINES, THE ONLY OVERFLOW
+C THAT CAN OCCUR IS INTEGER OVERFLOW IN THE AUXILIARY INDEX. IF THIS
+C IS DETECTED, THE SOFTWARE CALLS XERROR (A GENERAL ERROR-HANDLING
+C FORTRAN SUBROUTINE PACKAGE).
+C
+C   MULTIPLICATION AND DIVISION IS PERFORMED BY SETTING
+C
+C                 (X,IX)*(Y,IY) = (X*Y,IX+IY)
+C OR
+C                 (X,IX)/(Y,IY) = (X/Y,IX-IY).
+C
+C PRE-ADJUSTMENT OF THE OPERANDS IS ESSENTIAL TO AVOID
+C OVERFLOW OR  UNDERFLOW OF THE PRINCIPAL PART. SUBROUTINE
+C XSADJ (SEE BELOW) MAY BE CALLED TO TRANSFORM ANY EXTENDED-
+C RANGE NUMBER INTO ADJUSTED FORM.
+C
+C   ADDITION AND SUBTRACTION REQUIRE THE USE OF SUBROUTINE XSADD
+C (SEE BELOW).  THE INPUT OPERANDS NEED NOT BE IN ADJUSTED FORM.
+C HOWEVER, THE RESULT OF ADDITION OR SUBTRACTION IS RETURNED
+C IN ADJUSTED FORM.  THUS, FOR EXAMPLE, IF (X,IX),(Y,IY),
+C (U,IU),  AND (V,IV) ARE IN ADJUSTED FORM, THEN
+C
+C                 (X,IX)*(Y,IY) + (U,IU)*(V,IV)
+C
+C CAN BE COMPUTED AND STORED IN ADJUSTED FORM WITH NO EXPLICIT
+C CALLS TO XSADJ.
+C
+C   WHEN AN EXTENDED-RANGE NUMBER IS TO BE PRINTED, IT MUST BE
+C CONVERTED TO AN EXTENDED-RANGE FORM WITH DECIMAL RADIX.  SUBROUTINE
+C XSCON IS PROVIDED FOR THIS PURPOSE.
+C
+C   THE SUBROUTINES CONTAINED IN THIS PACKAGE ARE
+C
+C     SUBROUTINE XSADD
+C USAGE
+C                  CALL XSADD(X,IX,Y,IY,Z,IZ)
+C DESCRIPTION
+C                  FORMS THE EXTENDED-RANGE SUM  (Z,IZ) =
+C                  (X,IX) + (Y,IY).  (Z,IZ) IS ADJUSTED
+C                  BEFORE RETURNING. THE INPUT OPERANDS
+C                  NEED NOT BE IN ADJUSTED FORM, BUT THEIR
+C                  PRINCIPAL PARTS MUST SATISFY
+C                  RADIX**(-2L).LE.ABS(X).LE.RADIX**(2L),
+C                  RADIX**(-2L).LE.ABS(Y).LE.RADIX**(2L).
+C
+C     SUBROUTINE XSADJ
+C USAGE
+C                  CALL XSADJ(X,IX)
+C DESCRIPTION
+C                  TRANSFORMS (X,IX) SO THAT
+C                  RADIX**(-L) .LE. ABS(X) .LT. RADIX**L.
+C                  ON MOST COMPUTERS THIS TRANSFORMATION DOES
+C                  NOT CHANGE THE MANTISSA OF X PROVIDED RADIX IS
+C                  THE NUMBER BASE OF SINGLE-PRECISION ARITHMETIC.
+C
+C     SUBROUTINE XSC210
+C USAGE
+C                  CALL XSC210(K,Z,J)
+C DESCRIPTION
+C                  GIVEN K THIS SUBROUTINE COMPUTES J AND Z
+C                  SUCH THAT  RADIX**K = Z*10**J, WHERE Z IS IN
+C                  THE RANGE 1/10 .LE. Z .LT. 1.
+C                  THE VALUE OF Z WILL BE ACCURATE TO FULL
+C                  SINGLE-PRECISION PROVIDED THE NUMBER
+C                  OF DECIMAL PLACES IN THE LARGEST
+C                  INTEGER PLUS THE NUMBER OF DECIMAL
+C                  PLACES CARRIED IN SINGLE-PRECISION DOES NOT
+C                  EXCEED 60. XSC210 IS CALLED BY SUBROUTINE
+C                  XSCON WHEN NECESSARY. THE USER SHOULD
+C                  NEVER NEED TO CALL XSC210 DIRECTLY.
+C
+C     SUBROUTINE XSCON
+C USAGE
+C                  CALL XSCON(X,IX)
+C DESCRIPTION
+C                  CONVERTS (X,IX) = X*RADIX**IX
+C                  TO DECIMAL FORM IN PREPARATION FOR
+C                  PRINTING, SO THAT (X,IX) = X*10**IX
+C                  WHERE 1/10 .LE. ABS(X) .LT. 1
+C                  IS RETURNED, EXCEPT THAT IF
+C                  (ABS(X),IX) IS BETWEEN RADIX**(-2L)
+C                  AND RADIX**(2L) THEN THE REDUCED
+C                  FORM WITH IX = 0 IS RETURNED.
+C
+C     SUBROUTINE XSRED
+C USAGE
+C                  CALL XSRED(X,IX)
+C DESCRIPTION
+C                  IF
+C                  RADIX**(-2L) .LE. (ABS(X),IX) .LE. RADIX**(2L)
+C                  THEN XSRED TRANSFORMS (X,IX) SO THAT IX=0.
+C                  IF (X,IX) IS OUTSIDE THE ABOVE RANGE,
+C                  THEN XSRED TAKES NO ACTION.
+C                  THIS SUBROUTINE IS USEFUL IF THE
+C                  RESULTS OF EXTENDED-RANGE CALCULATIONS
+C                  ARE TO BE USED IN SUBSEQUENT ORDINARY
+C                  SINGLE-PRECISION CALCULATIONS.
+C
+C***REFERENCES  (SEE DESCRIPTION ABOVE)
+C***ROUTINES CALLED  I1MACH, XERROR
+C***COMMON BLOCKS    XSBLK1, XSBLK2, XSBLK3
+C***END PROLOGUE  XSSET
+      INTEGER IRAD, NRADPL, NBITS
+      REAL DZERO, DZEROX
+      COMMON /XSBLK1/ NBITSF
+      SAVE /XSBLK1/
+      REAL RADIX, RADIXL, RAD2L, DLG10R
+      INTEGER L, L2, KMAX
+      COMMON /XSBLK2/ RADIX, RADIXL, RAD2L, DLG10R, L, L2, KMAX
+      SAVE /XSBLK2/
+      INTEGER NLG102, MLG102, LG102
+      COMMON /XSBLK3/ NLG102, MLG102, LG102(21)
+      SAVE /XSBLK3/
+      INTEGER IFLAG
+      SAVE IFLAG
+C
+      DIMENSION LOG102(20), LGTEMP(20)
+C
+C   LOG102 CONTAINS THE FIRST 60 DIGITS OF LOG10(2) FOR USE IN
+C CONVERSION OF EXTENDED-RANGE NUMBERS TO BASE 10 .
+      DATA LOG102 /301,029,995,663,981,195,213,738,894,724,493,026,768,
+     * 189,881,462,108,541,310,428/
+C
+C FOLLOWING CODING PREVENTS XSSET FROM BEING EXECUTED MORE THAN ONCE.
+C THIS IS IMPORTANT BECAUSE SOME SUBROUTINES (SUCH AS XSNRMP AND
+C XSLEGF) CALL XSSET TO MAKE SURE EXTENDED-RANGE ARITHMETIC HAS
+C BEEN INITIALIZED. THE USER MAY WANT TO PRE-EMPT THIS CALL, FOR
+C EXAMPLE WHEN I1MACH IS NOT AVAILABLE. SEE CODING BELOW.
+      DATA IFLAG /0/
+C***FIRST EXECUTABLE STATEMENT  XSSET
+      IF (IFLAG .NE. 0) RETURN
+      IFLAG = 1
+      IRADX = IRAD
+      NRDPLC = NRADPL
+      DZEROX = DZERO
+      IMINEX = 0
+      IMAXEX = 0
+      NBITSX = NBITS
+C FOLLOWING 6 STATEMENTS SHOULD BE DELETED IF I1MACH
+C NOT AVAILABLE OR NOT CONFIGURED TO RETURN THE CORRECT
+C MACHINE-DEPENDENT VALUES.
+      IF (IRADX .EQ. 0) IRADX = I1MACH (10)
+      IF (NRDPLC .EQ. 0) NRDPLC = I1MACH (11)
+      IF (DZEROX .EQ. 0.0) IMINEX = I1MACH (12)
+      IF (DZEROX .EQ. 0.0) IMAXEX = I1MACH (13)
+      IF (NBITSX .EQ. 0) NBITSX = I1MACH (8)
+      IF (IRADX.EQ.2) GO TO 10
+      IF (IRADX.EQ.4) GO TO 10
+      IF (IRADX.EQ.8) GO TO 10
+      IF (IRADX.EQ.16) GO TO 10
+      CALL XERROR('ERR IN XSSET...IMPROPER VALUE OF IRAD',37,1,1)
+      GO TO 100
+   10 CONTINUE
+      LOG2R=0
+      IF (IRADX.EQ.2) LOG2R = 1
+      IF (IRADX.EQ.4) LOG2R = 2
+      IF (IRADX.EQ.8) LOG2R = 3
+      IF (IRADX.EQ.16) LOG2R = 4
+      NBITSF=LOG2R*NRDPLC
+      RADIX = IRADX
+      DLG10R = ALOG10(RADIX)
+      IF (DZEROX .NE. 0.0) GO TO 14
+      L = MIN0 ((1-IMINEX)/2, (IMAXEX-1)/2)
+      GO TO 16
+   14 L = 0.5*ALOG10(DZEROX)/DLG10R
+C RADIX**(2*L) SHOULD NOT OVERFLOW, BUT REDUCE L BY 1 FOR FURTHER
+C PROTECTION.
+      L=L-1
+   16 L2 = 2*L
+      IF (L.GE.4) GO TO 20
+      CALL XERROR('ERR IN XSSET...IMPROPER VALUE OF DZERO',38,2,1)
+      GO TO 100
+   20 RADIXL = RADIX**L
+      RAD2L = RADIXL**2
+C    IT IS NECESSARY TO RESTRICT NBITS (OR NBITSX) TO BE LESS THAN SOME
+C UPPER LIMIT BECAUSE OF BINARY-TO-DECIMAL CONVERSION. SUCH CONVERSION
+C IS DONE BY XSC210 AND REQUIRES A CONSTANT THAT IS STORED TO SOME FIXED
+C PRECISION. THE CONSTANT THAT IS STORED (LOG102 IN THIS ROUTINE) PROVIDES
+C FOR CONVERSIONS TO BE ACCURATE TO THE LAST DECIMAL DIGIT WHEN THE INTEGER
+C WORD LENGTH DOES NOT EXCEED 63. A LOWER LIMIT OF 15 BITS IS IMPOSED
+C BECAUSE THE SOFTWARE IS DESIGNED TO RUN ON COMPUTERS WITH INTEGER WORD
+C LENGTH OF AT LEAST 16 BITS.
+      IF (15.LE.NBITSX .AND. NBITSX.LE.63) GO TO 30
+      CALL XERROR('ERR IN XSSET...IMPROPER VALUE OF NBITS',38,3,1)
+      GO TO 100
+   30 CONTINUE
+      KMAX = 2**(NBITSX-1) - L2
+      NB = (NBITSX-1)/2
+      MLG102 = 2**NB
+      IF (1.LE.NRDPLC*LOG2R .AND. NRDPLC*LOG2R.LE.120) GO TO 40
+      CALL XERROR('ERR IN XSSET...IMPROPER VALUE OF NRADPL',39,4,1)
+      GO TO 100
+   40 CONTINUE
+      NLG102 = NRDPLC*LOG2R/NB + 3
+      NP1 = NLG102 + 1
+C
+C   AFTER COMPLETION OF THE FOLLOWING LOOP, IC CONTAINS
+C THE INTEGER PART AND LGTEMP CONTAINS THE FRACTIONAL PART
+C OF LOG10(IRADX) IN RADIX 1000.
+      IC = 0
+      DO 50 II=1,20
+        I = 21 - II
+        IT = LOG2R*LOG102(I) + IC
+        IC = IT/1000
+        LGTEMP(I) = MOD(IT,1000)
+   50 CONTINUE
+C
+C   AFTER COMPLETION OF THE FOLLOWING LOOP, LG102 CONTAINS
+C LOG10(IRADX) IN RADIX MLG102. THE RADIX POINT IS
+C BETWEEN LG102(1) AND LG102(2).
+      LG102(1) = IC
+      DO 80 I=2,NP1
+        LG102(I) = 0
+        DO 70 J=1,NB
+          IC = 0
+          DO 60 KK=1,20
+            K = 21 - KK
+            IT = 2*LGTEMP(K) + IC
+            IC = IT/1000
+            LGTEMP(K) = MOD(IT,1000)
+   60     CONTINUE
+          LG102(I) = 2*LG102(I) + IC
+   70   CONTINUE
+   80 CONTINUE
+C
+C CHECK SPECIAL CONDITIONS REQUIRED BY SUBROUTINES...
+      IF (NRDPLC.LT.L) GO TO 90
+      CALL XERROR('ERR IN XSSET...NRADPL .GE. L',28,5,1)
+      GO TO 100
+   90 IF (6*L.LE.KMAX) GO TO 100
+      CALL XERROR('ERR IN XSSET...6*L .GT. KMAX',28,6,1)
+      GO TO 100
+  100 CONTINUE
+      RETURN
+      END
+*DECK XSADD
+      SUBROUTINE XSADD(X,IX,Y,IY,Z,IZ)
+C***BEGIN PROLOGUE  XSADD
+C***DATE WRITTEN   820712   (YYMMDD)
+C***REVISION DATE  831025   (YYMMDD)
+C***CATEGORY NO.  A3d
+C***KEYWORDS  EXTENDED-RANGE SINGLE-PRECISION ARITHMETIC
+C***AUTHOR  LOZIER, DANIEL W. (NATIONAL BUREAU OF STANDARDS)
+C           SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO PROVIDE SINGLE-PRECISION FLOATING-POINT ARITHMETIC
+C            WITH AN EXTENDED EXPONENT RANGE
+C***DESCRIPTION
+C     REAL X, Y, Z
+C     INTEGER IX, IY, IZ
+C
+C                  FORMS THE EXTENDED-RANGE SUM  (Z,IZ) =
+C                  (X,IX) + (Y,IY).  (Z,IZ) IS ADJUSTED
+C                  BEFORE RETURNING. THE INPUT OPERANDS
+C                  NEED NOT BE IN ADJUSTED FORM, BUT THEIR
+C                  PRINCIPAL PARTS MUST SATISFY
+C                  RADIX**(-2L).LE.ABS(X).LE.RADIX**(2L),
+C                  RADIX**(-2L).LE.ABS(Y).LE.RADIX**(2L).
+C
+C***REFERENCES  (PROGRAM LISTING FOR XSSET)
+C***ROUTINES CALLED  XSADJ
+C***COMMON BLOCKS    XSBLK2
+C***END PROLOGUE  XSADD
+      REAL X, Y, Z
+      INTEGER IX, IY, IZ
+      REAL RADIX, RADIXL, RAD2L, DLG10R
+      INTEGER L, L2, KMAX
+      COMMON /XSBLK2/ RADIX, RADIXL, RAD2L, DLG10R, L, L2, KMAX
+      SAVE /XSBLK2/
+C
+C
+C   THE CONDITIONS IMPOSED ON L AND KMAX BY THIS SUBROUTINE
+C ARE
+C     (1) 1 .LT. L .LE. 0.5*LOGR(0.5*DZERO)
+C
+C     (2) NRADPL .LT. L .LE. KMAX/6
+C
+C     (3) KMAX .LE. (2**NBITS - 4*L - 1)/2
+C
+C THESE CONDITIONS MUST BE MET BY APPROPRIATE CODING
+C IN SUBROUTINE XSSET.
+C
+C***FIRST EXECUTABLE STATEMENT  XSADD
+      IF (X.NE.0.0) GO TO 10
+      Z = Y
+      IZ = IY
+      GO TO 220
+   10 IF (Y.NE.0.0) GO TO 20
+      Z = X
+      IZ = IX
+      GO TO 220
+   20 CONTINUE
+      IF (IX.GE.0 .AND. IY.GE.0) GO TO 40
+      IF (IX.LT.0 .AND. IY.LT.0) GO TO 40
+      IF (IABS(IX).LE.6*L .AND. IABS(IY).LE.6*L) GO TO 40
+      IF (IX.GE.0) GO TO 30
+      Z = Y
+      IZ = IY
+      GO TO 220
+   30 CONTINUE
+      Z = X
+      IZ = IX
+      GO TO 220
+   40 I = IX - IY
+      IF (I) 80, 50, 90
+   50 IF (ABS(X).GT.1.0 .AND. ABS(Y).GT.1.0) GO TO 60
+      IF (ABS(X).LT.1.0 .AND. ABS(Y).LT.1.0) GO TO 70
+      Z = X + Y
+      IZ = IX
+      GO TO 220
+   60 S = X/RADIXL
+      T = Y/RADIXL
+      Z = S + T
+      IZ = IX + L
+      GO TO 220
+   70 S = X*RADIXL
+      T = Y*RADIXL
+      Z = S + T
+      IZ = IX - L
+      GO TO 220
+   80 S = Y
+      IS = IY
+      T = X
+      GO TO 100
+   90 S = X
+      IS = IX
+      T = Y
+  100 CONTINUE
+C
+C  AT THIS POINT, THE ONE OF (X,IX) OR (Y,IY) THAT HAS THE
+C LARGER AUXILIARY INDEX IS STORED IN (S,IS). THE PRINCIPAL
+C PART OF THE OTHER INPUT IS STORED IN T.
+C
+      I1 = IABS(I)/L
+      I2 = MOD(IABS(I),L)
+      IF (ABS(T).GE.RADIXL) GO TO 130
+      IF (ABS(T).GE.1.0) GO TO 120
+      IF (RADIXL*ABS(T).GE.1.0) GO TO 110
+      J = I1 + 1
+      T = T*RADIX**(L-I2)
+      GO TO 140
+  110 J = I1
+      T = T*RADIX**(-I2)
+      GO TO 140
+  120 J = I1 - 1
+      IF (J.LT.0) GO TO 110
+      T = T*RADIX**(-I2)/RADIXL
+      GO TO 140
+  130 J = I1 - 2
+      IF (J.LT.0) GO TO 120
+      T = T*RADIX**(-I2)/RAD2L
+  140 CONTINUE
+C
+C  AT THIS POINT, SOME OR ALL OF THE DIFFERENCE IN THE
+C AUXILIARY INDICES HAS BEEN USED TO EFFECT A LEFT SHIFT
+C OF T.  THE SHIFTED VALUE OF T SATISFIES
+C
+C       RADIX**(-2*L) .LE. ABS(T) .LE. 1.0
+C
+C AND, IF J=0, NO FURTHER SHIFTING REMAINS TO BE DONE.
+C
+      IF (J.EQ.0) GO TO 190
+      IF (ABS(S).GE.RADIXL .OR. J.GT.3) GO TO 150
+      IF (ABS(S).GE.1.0) GO TO (180, 150, 150), J
+      IF (RADIXL*ABS(S).GE.1.0) GO TO (180, 170, 150), J
+      GO TO (180, 170, 160), J
+  150 Z = S
+      IZ = IS
+      GO TO 220
+  160 S = S*RADIXL
+  170 S = S*RADIXL
+  180 S = S*RADIXL
+  190 CONTINUE
+C
+C   AT THIS POINT, THE REMAINING DIFFERENCE IN THE
+C AUXILIARY INDICES HAS BEEN USED TO EFFECT A RIGHT SHIFT
+C OF S.  IF THE SHIFTED VALUE OF S WOULD HAVE EXCEEDED
+C RADIX**L, THEN (S,IS) IS RETURNED AS THE VALUE OF THE
+C SUM.
+C
+      IF (ABS(S).GT.1.0 .AND. ABS(T).GT.1.0) GO TO 200
+      IF (ABS(S).LT.1.0 .AND. ABS(T).LT.1.0) GO TO 210
+      Z = S + T
+      IZ = IS - J*L
+      GO TO 220
+  200 S = S/RADIXL
+      T = T/RADIXL
+      Z = S + T
+      IZ = IS - J*L + L
+      GO TO 220
+  210 S = S*RADIXL
+      T = T*RADIXL
+      Z = S + T
+      IZ = IS - J*L - L
+  220 CALL XSADJ(Z, IZ)
+      RETURN
+      END
+*DECK XSADJ
+      SUBROUTINE XSADJ(X,IX)
+C***BEGIN PROLOGUE  XSADJ
+C***DATE WRITTEN   820712   (YYMMDD)
+C***REVISION DATE  830124   (YYMMDD)
+C***CATEGORY NO.  A3d
+C***KEYWORDS  EXTENDED-RANGE SINGLE-PRECISION ARITHMETIC
+C***AUTHOR  LOZIER, DANIEL W. (NATIONAL BUREAU OF STANDARDS)
+C           SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO PROVIDE SINGLE-PRECISION FLOATING-POINT ARITHMETIC
+C            WITH AN EXTENDED EXPONENT RANGE
+C***DESCRIPTION
+C     REAL X
+C     INTEGER IX
+C
+C                  TRANSFORMS (X,IX) SO THAT
+C                  RADIX**(-L) .LE. ABS(X) .LT. RADIX**L.
+C                  ON MOST COMPUTERS THIS TRANSFORMATION DOES
+C                  NOT CHANGE THE MANTISSA OF X PROVIDED RADIX IS
+C                  THE NUMBER BASE OF SINGLE-PRECISION ARITHMETIC.
+C
+C***REFERENCES  (PROGRAM LISTING FOR XSSET)
+C***ROUTINES CALLED  XERROR
+C***COMMON BLOCKS    XSBLK2
+C***END PROLOGUE  XSADJ
+      REAL X
+      INTEGER IX
+      REAL RADIX, RADIXL, RAD2L, DLG10R
+      INTEGER L, L2, KMAX
+      COMMON /XSBLK2/ RADIX, RADIXL, RAD2L, DLG10R, L, L2, KMAX
+      SAVE /XSBLK2/
+C
+C   THE CONDITION IMPOSED ON L AND KMAX BY THIS SUBROUTINE
+C IS
+C     2*L .LE. KMAX
+C
+C THIS CONDITION MUST BE MET BY APPROPRIATE CODING
+C IN SUBROUTINE XSSET.
+C
+C***FIRST EXECUTABLE STATEMENT  XSADJ
+      IF (X.EQ.0.0) GO TO 50
+      IF (ABS(X).GE.1.0) GO TO 20
+      IF (RADIXL*ABS(X).GE.1.0) GO TO 60
+      X = X*RAD2L
+      IF (IX.LT.0) GO TO 10
+      IX = IX - L2
+      GO TO 70
+   10 IF (IX.LT.-KMAX+L2) GO TO 40
+      IX = IX - L2
+      GO TO 70
+   20 IF (ABS(X).LT.RADIXL) GO TO 60
+      X = X/RAD2L
+      IF (IX.GT.0) GO TO 30
+      IX = IX + L2
+      GO TO 70
+   30 IF (IX.GT.KMAX-L2) GO TO 40
+      IX = IX + L2
+      GO TO 70
+   40 CALL XERROR('Err in XSADJ...overflow in auxiliary index',42,1,1)
+      RETURN
+   50 IX = 0
+   60 IF (IABS(IX).GT.KMAX) GO TO 40
+   70 RETURN
+      END
+*DECK XSCON
+      SUBROUTINE XSCON(X,IX)
+C***BEGIN PROLOGUE  XSCON
+C***DATE WRITTEN   820712   (YYMMDD)
+C***REVISION DATE  831025   (YYMMDD)
+C***CATEGORY NO.  A3d
+C***KEYWORDS  EXTENDED-RANGE SINGLE-PRECISION ARITHMETIC
+C***AUTHOR  LOZIER, DANIEL W. (NATIONAL BUREAU OF STANDARDS)
+C           SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO PROVIDE SINGLE-PRECISION FLOATING-POINT ARITHMETIC
+C            WITH AN EXTENDED EXPONENT RANGE
+C***DESCRIPTION
+C     REAL X
+C     INTEGER IX
+C
+C                  CONVERTS (X,IX) = X*RADIX**IX
+C                  TO DECIMAL FORM IN PREPARATION FOR
+C                  PRINTING, SO THAT (X,IX) = X*10**IX
+C                  WHERE 1/10 .LE. ABS(X) .LT. 1
+C                  IS RETURNED, EXCEPT THAT IF
+C                  (ABS(X),IX) IS BETWEEN RADIX**(-2L)
+C                  AND RADIX**(2L) THEN THE REDUCED
+C                  FORM WITH IX = 0 IS RETURNED.
+C
+C***REFERENCES (PROGRAM LISTING FOR XSSET)
+C***ROUTINES CALLED  XSADJ, XSC210, XSRED
+C***COMMON BLOCKS    XSBLK2
+C***END PROLOGUE  XSCON
+      REAL X
+      INTEGER IX
+C
+C   THE CONDITIONS IMPOSED ON L AND KMAX BY THIS SUBROUTINE
+C ARE
+C    (1) 4 .LE. L .LE. 2**NBITS - 1 - KMAX
+C
+C    (2) KMAX .LE. ((2**NBITS)-2)/LOG10R - L
+C
+C THESE CONDITIONS MUST BE MET BY APPROPRIATE CODING
+C IN SUBROUTINE XSSET.
+C
+      REAL RADIX, RADIXL, RAD2L, DLG10R
+      INTEGER L, L2, KMAX
+      COMMON /XSBLK2/ RADIX, RADIXL, RAD2L, DLG10R, L, L2, KMAX
+      SAVE /XSBLK2/
+C
+      REAL A, B, Z
+C
+      DATA ISPACE /1/
+C   THE PARAMETER ISPACE IS THE INCREMENT USED IN FORM-
+C ING THE AUXILIARY INDEX OF THE DECIMAL EXTENDED-RANGE
+C FORM. THE RETURNED VALUE OF IX WILL BE AN INTEGER MULT-
+C IPLE OF ISPACE. ISPACE MUST SATISFY 1 .LE. ISPACE .LE.
+C L/2. IF A VALUE GREATER THAN 1 IS TAKEN, THE RETURNED
+C VALUE OF X WILL SATISFY 10**(-ISPACE) .LE. ABS(X) .LE. 1
+C WHEN (ABS(X),IX) .LT. RADIX**(-2L) AND 1/10 .LE. ABS(X)
+C .LT. 10**(ISPACE-1) WHEN (ABS(X),IX) .GT. RADIX**(2L).
+C
+C***FIRST EXECUTABLE STATEMENT  XSCON
+      CALL XSRED(X, IX)
+      IF (IX.EQ.0) GO TO 150
+      CALL XSADJ(X, IX)
+C
+C CASE 1 IS WHEN (X,IX) IS LESS THAN RADIX**(-2L) IN MAGNITUDE,
+C CASE 2 IS WHEN (X,IX) IS GREATER THAN RADIX**(2L) IN MAGNITUDE.
+      ITEMP = 1
+      ICASE = (3+ISIGN(ITEMP,IX))/2
+      GO TO (10, 20), ICASE
+   10 IF (ABS(X).LT.1.0) GO TO 30
+      X = X/RADIXL
+      IX = IX + L
+      GO TO 30
+   20 IF (ABS(X).GE.1.0) GO TO 30
+      X = X*RADIXL
+      IX = IX - L
+   30 CONTINUE
+C
+C AT THIS POINT, RADIX**(-L) .LE. ABS(X) .LT. 1.0     IN CASE 1,
+C                      1.0 .LE. ABS(X) .LT. RADIX**L  IN CASE 2.
+      I = ALOG10(ABS(X))/DLG10R
+      A = RADIX**I
+      GO TO (40, 60), ICASE
+   40 IF (A.LE.RADIX*ABS(X)) GO TO 50
+      I = I - 1
+      A = A/RADIX
+      GO TO 40
+   50 IF (ABS(X).LT.A) GO TO 80
+      I = I + 1
+      A = A*RADIX
+      GO TO 50
+   60 IF (A.LE.ABS(X)) GO TO 70
+      I = I - 1
+      A = A/RADIX
+      GO TO 60
+   70 IF (ABS(X).LT.RADIX*A) GO TO 80
+      I = I + 1
+      A = A*RADIX
+      GO TO 70
+   80 CONTINUE
+C
+C AT THIS POINT I IS SUCH THAT
+C RADIX**(I-1) .LE. ABS(X) .LT. RADIX**I      IN CASE 1,
+C     RADIX**I .LE. ABS(X) .LT. RADIX**(I+1)  IN CASE 2.
+      ITEMP = FLOAT(ISPACE)/DLG10R
+      A = RADIX**ITEMP
+      B = 10.0**ISPACE
+   90 IF (A.LE.B) GO TO 100
+      ITEMP = ITEMP - 1
+      A = A/RADIX
+      GO TO 90
+  100 IF (B.LT.A*RADIX) GO TO 110
+      ITEMP = ITEMP + 1
+      A = A*RADIX
+      GO TO 100
+  110 CONTINUE
+C
+C AT THIS POINT ITEMP IS SUCH THAT
+C RADIX**ITEMP .LE. 10**ISPACE .LT. RADIX**(ITEMP+1).
+      IF (ITEMP.GT.0) GO TO 120
+C ITEMP = 0 IF, AND ONLY IF, ISPACE = 1 AND RADIX = 16.0
+      X = X*RADIX**(-I)
+      IX = IX + I
+      CALL XSC210(IX, Z, J)
+      X = X*Z
+      IX = J
+      GO TO (130, 140), ICASE
+  120 CONTINUE
+      I1 = I/ITEMP
+      X = X*RADIX**(-I1*ITEMP)
+      IX = IX + I1*ITEMP
+C
+C AT THIS POINT,
+C RADIX**(-ITEMP) .LE. ABS(X) .LT. 1.0        IN CASE 1,
+C           1.0 .LE. ABS(X) .LT. RADIX**ITEMP IN CASE 2.
+      CALL XSC210(IX, Z, J)
+      J1 = J/ISPACE
+      J2 = J - J1*ISPACE
+      X = X*Z*10.0**J2
+      IX = J1*ISPACE
+C
+C AT THIS POINT,
+C  10.0**(-2*ISPACE) .LE. ABS(X) .LT. 1.0                IN CASE 1,
+C           10.0**-1 .LE. ABS(X) .LT. 10.0**(2*ISPACE-1) IN CASE 2.
+      GO TO (130, 140), ICASE
+  130 IF (B*ABS(X).GE.1.0) GO TO 150
+      X = X*B
+      IX = IX - ISPACE
+      GO TO 130
+  140 IF (10.0*ABS(X).LT.B) GO TO 150
+      X = X/B
+      IX = IX + ISPACE
+      GO TO 140
+  150 RETURN
+      END
+*DECK XSC210
+      SUBROUTINE XSC210(K, Z, J)
+C***BEGIN PROLOGUE  XSC210
+C***DATE WRITTEN   820712   (YYMMDD)
+C***REVISION DATE  831025   (YYMMDD)
+C***CATEGORY NO.  A3d
+C***KEYWORDS  EXTENDED-RANGE SINGLE-PRECISION ARITHMETIC
+C***AUTHOR  LOZIER, DANIEL W. (NATIONAL BUREAU OF STANDARDS)
+C           SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO PROVIDE SINGLE-PRECISION FLOATING-POINT ARITHMETIC
+C            WITH AN EXTENDED EXPONENT RANGE
+C***DESCRIPTION
+C     INTEGER K, J
+C     REAL Z
+C
+C                  GIVEN K THIS SUBROUTINE COMPUTES J AND Z
+C                  SUCH THAT  RADIX**K = Z*10**J, WHERE Z IS IN
+C                  THE RANGE 1/10 .LE. Z .LT. 1.
+C                  THE VALUE OF Z WILL BE ACCURATE TO FULL
+C                  SINGLE-PRECISION PROVIDED THE NUMBER
+C                  OF DECIMAL PLACES IN THE LARGEST
+C                  INTEGER PLUS THE NUMBER OF DECIMAL
+C                  PLACES CARRIED IN SINGLE-PRECISION DOES NOT
+C                  EXCEED 60. XSC210 IS CALLED BY SUBROUTINE
+C                  XSCON WHEN NECESSARY. THE USER SHOULD
+C                  NEVER NEED TO CALL XSC210 DIRECTLY.
+C
+C***REFERENCES  (PROGRAM LISTING FOR XSSET)
+C***ROUTINES CALLED  XERROR
+C***COMMON BLOCKS    XSBLK3
+C***END PROLOGUE  XSC210
+      INTEGER K, J
+      REAL Z
+      INTEGER NLG102, MLG102, LG102
+      COMMON /XSBLK3/ NLG102, MLG102, LG102(21)
+      SAVE /XSBLK3/
+C
+C   THE CONDITIONS IMPOSED ON NLG102, MLG102, AND LG102 BY
+C THIS SUBROUTINE ARE
+C
+C     (1) NLG102 .GE. 2
+C
+C     (2) MLG102 .GE. 1
+C
+C     (3) 2*MLG102*(MLG102 - 1) .LE. 2**NBITS - 1
+C
+C THESE CONDITIONS MUST BE MET BY APPROPRIATE CODING
+C IN SUBROUTINE XSSET.
+C
+C***FIRST EXECUTABLE STATEMENT  XSC210
+      IF (K.EQ.0) GO TO 70
+      M = MLG102
+      KA = IABS(K)
+      KA1 = KA/M
+      KA2 = MOD(KA,M)
+      IF (KA1.GE.M) GO TO 60
+      NM1 = NLG102 - 1
+      NP1 = NLG102 + 1
+      IT = KA2*LG102(NP1)
+      IC = IT/M
+      ID = MOD(IT,M)
+      Z = ID
+      IF (KA1.GT.0) GO TO 20
+      DO 10 II=1,NM1
+        I = NP1 - II
+        IT = KA2*LG102(I) + IC
+        IC = IT/M
+        ID = MOD(IT,M)
+        Z = Z/FLOAT(M) + FLOAT(ID)
+   10 CONTINUE
+      JA = KA*LG102(1) + IC
+      GO TO 40
+   20 CONTINUE
+      DO 30 II=1,NM1
+        I = NP1 - II
+        IT = KA2*LG102(I) + KA1*LG102(I+1) + IC
+        IC = IT/M
+        ID = MOD(IT,M)
+        Z = Z/FLOAT(M) + FLOAT(ID)
+   30 CONTINUE
+      JA = KA*LG102(1) + KA1*LG102(2) + IC
+   40 CONTINUE
+      Z = Z/FLOAT(M)
+      IF (K.GT.0) GO TO 50
+      J = -JA
+      Z = 10.0**(-Z)
+      GO TO 80
+   50 CONTINUE
+      J = JA + 1
+      Z = 10.0**(Z-1.0)
+      GO TO 80
+   60 CONTINUE
+C   THIS ERROR OCCURS IF K EXCEEDS  MLG102**2 - 1  IN MAGNITUDE.
+C
+      CALL XERROR('Err in XSC210...K too large',27,1,1)
+      RETURN
+   70 CONTINUE
+      J = 0
+      Z = 1.0
+   80 RETURN
+      END
+*DECK XSRED
+      SUBROUTINE XSRED(X,IX)
+C***BEGIN PROLOGUE  XSRED
+C***DATE WRITTEN   820712   (YYMMDD)
+C***REVISION DATE  831025   (YYMMDD)
+C***CATEGORY NO.  A3d
+C***KEYWORDS  EXTENDED-RANGE SINGLE-PRECISION ARITHMETIC
+C***AUTHOR  LOZIER, DANIEL W. (NATIONAL BUREAU OF STANDARDS)
+C           SMITH, JOHN M. (NBS AND GEORGE MASON UNIVERSITY)
+C***PURPOSE  TO PROVIDE SINGLE-PRECISION FLOATING-POINT ARITHMETIC
+C            WITH AN EXTENDED EXPONENT RANGE
+C***DESCRIPTION
+C     REAL X
+C     INTEGER IX
+C
+C                  IF
+C                  RADIX**(-2L) .LE. (ABS(X),IX) .LE. RADIX**(2L)
+C                  THEN XSRED TRANSFORMS (X,IX) SO THAT IX=0.
+C                  IF (X,IX) IS OUTSIDE THE ABOVE RANGE,
+C                  THEN XSRED TAKES NO ACTION.
+C                  THIS SUBROUTINE IS USEFUL IF THE
+C                  RESULTS OF EXTENDED-RANGE CALCULATIONS
+C                  ARE TO BE USED IN SUBSEQUENT ORDINARY
+C                  SINGLE-PRECISION CALCULATIONS.
+C
+C***REFERENCES  (PROGRAM LISTING FOR XSSET)
+C***ROUTINES CALLED  (NONE)
+C***COMMON BLOCKS    XSBLK2
+C***END PROLOGUE  XSRED
+      REAL X
+      INTEGER IX
+      REAL RADIX, RADIXL, RAD2L, DLG10R, XA
+      INTEGER L, L2, KMAX
+      COMMON /XSBLK2/ RADIX, RADIXL, RAD2L, DLG10R, L, L2, KMAX
+      SAVE /XSBLK2/
+C
+C***FIRST EXECUTABLE STATEMENT  XSRED
+      IF (X.EQ.0.0) GO TO 90
+      XA = ABS(X)
+      IF (IX.EQ.0) GO TO 70
+      IXA = IABS(IX)
+      IXA1 = IXA/L2
+      IXA2 = MOD(IXA,L2)
+      IF (IX.GT.0) GO TO 40
+   10 CONTINUE
+      IF (XA.GT.1.0) GO TO 20
+      XA = XA*RAD2L
+      IXA1 = IXA1 + 1
+      GO TO 10
+   20 XA = XA/RADIX**IXA2
+      IF (IXA1.EQ.0) GO TO 70
+      DO 30 I=1,IXA1
+        IF (XA.LT.1.0) GO TO 100
+        XA = XA/RAD2L
+   30 CONTINUE
+      GO TO 70
+C
+   40 CONTINUE
+      IF (XA.LT.1.0) GO TO 50
+      XA = XA/RAD2L
+      IXA1 = IXA1 + 1
+      GO TO 40
+   50 XA = XA*RADIX**IXA2
+      IF (IXA1.EQ.0) GO TO 70
+      DO 60 I=1,IXA1
+        IF (XA.GT.1.0) GO TO 100
+        XA = XA*RAD2L
+   60 CONTINUE
+   70 IF (XA.GT.RAD2L) GO TO 100
+      IF (XA.GT.1.0) GO TO 80
+      IF (RAD2L*XA.LT.1.0) GO TO 100
+   80 X = SIGN(XA,X)
+   90 IX = 0
+  100 RETURN
+      END
+      INTEGER FUNCTION I1MACH(I)
+      INTEGER I
+C
+C    I1MACH( 1) = THE STANDARD INPUT UNIT.
+C    I1MACH( 2) = THE STANDARD OUTPUT UNIT.
+C    I1MACH( 3) = THE STANDARD PUNCH UNIT.
+C    I1MACH( 4) = THE STANDARD ERROR MESSAGE UNIT.
+C    I1MACH( 5) = THE NUMBER OF BITS PER INTEGER STORAGE UNIT.
+C    I1MACH( 6) = THE NUMBER OF CHARACTERS PER CHARACTER STORAGE UNIT.
+C    INTEGERS HAVE FORM SIGN ( X(S-1)*A**(S-1) + ... + X(1)*A + X(0) )
+C    I1MACH( 7) = A, THE BASE.
+C    I1MACH( 8) = S, THE NUMBER OF BASE-A DIGITS.
+C    I1MACH( 9) = A**S - 1, THE LARGEST MAGNITUDE.
+C    FLOATS HAVE FORM  SIGN (B**E)*( (X(1)/B) + ... + (X(T)/B**T) )
+C               WHERE  EMIN .LE. E .LE. EMAX.
+C    I1MACH(10) = B, THE BASE.
+C  SINGLE-PRECISION
+C    I1MACH(11) = T, THE NUMBER OF BASE-B DIGITS.
+C    I1MACH(12) = EMIN, THE SMALLEST EXPONENT E.
+C    I1MACH(13) = EMAX, THE LARGEST EXPONENT E.
+C  DOUBLE-PRECISION
+C    I1MACH(14) = T, THE NUMBER OF BASE-B DIGITS.
+C    I1MACH(15) = EMIN, THE SMALLEST EXPONENT E.
+C    I1MACH(16) = EMAX, THE LARGEST EXPONENT E.
+C
+      INTEGER IMACH(16), OUTPUT, SC, SMALL(2)
+      SAVE IMACH, SC
+      REAL RMACH
+      EQUIVALENCE (IMACH(4),OUTPUT), (RMACH,SMALL(1))
+      INTEGER I3, J, K, T3E(3)
+      DATA T3E(1) / 9777664 /
+      DATA T3E(2) / 5323660 /
+      DATA T3E(3) / 46980 /
+C  THIS VERSION ADAPTS AUTOMATICALLY TO MOST CURRENT MACHINES,
+C  INCLUDING AUTO-DOUBLE COMPILERS.
+C  TO COMPILE ON OLDER MACHINES, ADD A C IN COLUMN 1
+C  ON THE NEXT LINE
+      DATA SC/0/
+C  AND REMOVE THE C FROM COLUMN 1 IN ONE OF THE SECTIONS BELOW.
+C  CONSTANTS FOR EVEN OLDER MACHINES CAN BE OBTAINED BY
+C          mail netlib@research.bell-labs.com
+C          send old1mach from blas
+C  PLEASE SEND CORRECTIONS TO dmg OR ehg@bell-labs.com.
+C
+C     MACHINE CONSTANTS FOR THE HONEYWELL DPS 8/70 SERIES.
+C
+C      DATA IMACH( 1) /    5 /
+C      DATA IMACH( 2) /    6 /
+C      DATA IMACH( 3) /   43 /
+C      DATA IMACH( 4) /    6 /
+C      DATA IMACH( 5) /   36 /
+C      DATA IMACH( 6) /    4 /
+C      DATA IMACH( 7) /    2 /
+C      DATA IMACH( 8) /   35 /
+C      DATA IMACH( 9) / O377777777777 /
+C      DATA IMACH(10) /    2 /
+C      DATA IMACH(11) /   27 /
+C      DATA IMACH(12) / -127 /
+C      DATA IMACH(13) /  127 /
+C      DATA IMACH(14) /   63 /
+C      DATA IMACH(15) / -127 /
+C      DATA IMACH(16) /  127 /, SC/987/
+C
+C     MACHINE CONSTANTS FOR PDP-11 FORTRANS SUPPORTING
+C     32-BIT INTEGER ARITHMETIC.
+C
+C      DATA IMACH( 1) /    5 /
+C      DATA IMACH( 2) /    6 /
+C      DATA IMACH( 3) /    7 /
+C      DATA IMACH( 4) /    6 /
+C      DATA IMACH( 5) /   32 /
+C      DATA IMACH( 6) /    4 /
+C      DATA IMACH( 7) /    2 /
+C      DATA IMACH( 8) /   31 /
+C      DATA IMACH( 9) / 2147483647 /
+C      DATA IMACH(10) /    2 /
+C      DATA IMACH(11) /   24 /
+C      DATA IMACH(12) / -127 /
+C      DATA IMACH(13) /  127 /
+C      DATA IMACH(14) /   56 /
+C      DATA IMACH(15) / -127 /
+C      DATA IMACH(16) /  127 /, SC/987/
+C
+C     MACHINE CONSTANTS FOR THE UNIVAC 1100 SERIES.
+C
+C     NOTE THAT THE PUNCH UNIT, I1MACH(3), HAS BEEN SET TO 7
+C     WHICH IS APPROPRIATE FOR THE UNIVAC-FOR SYSTEM.
+C     IF YOU HAVE THE UNIVAC-FTN SYSTEM, SET IT TO 1.
+C
+C      DATA IMACH( 1) /    5 /
+C      DATA IMACH( 2) /    6 /
+C      DATA IMACH( 3) /    7 /
+C      DATA IMACH( 4) /    6 /
+C      DATA IMACH( 5) /   36 /
+C      DATA IMACH( 6) /    6 /
+C      DATA IMACH( 7) /    2 /
+C      DATA IMACH( 8) /   35 /
+C      DATA IMACH( 9) / O377777777777 /
+C      DATA IMACH(10) /    2 /
+C      DATA IMACH(11) /   27 /
+C      DATA IMACH(12) / -128 /
+C      DATA IMACH(13) /  127 /
+C      DATA IMACH(14) /   60 /
+C      DATA IMACH(15) /-1024 /
+C      DATA IMACH(16) / 1023 /, SC/987/
+C
+      IF (SC .NE. 987) THEN
+*        *** CHECK FOR AUTODOUBLE ***
+         SMALL(2) = 0
+         RMACH = 1E13
+         IF (SMALL(2) .NE. 0) THEN
+*           *** AUTODOUBLED ***
+            IF (      (SMALL(1) .EQ. 1117925532
+     *           .AND. SMALL(2) .EQ. -448790528)
+     *       .OR.     (SMALL(2) .EQ. 1117925532
+     *           .AND. SMALL(1) .EQ. -448790528)) THEN
+*               *** IEEE ***
+               IMACH(10) = 2
+               IMACH(14) = 53
+               IMACH(15) = -1021
+               IMACH(16) = 1024
+            ELSE IF ( SMALL(1) .EQ. -2065213935
+     *          .AND. SMALL(2) .EQ. 10752) THEN
+*               *** VAX WITH D_FLOATING ***
+               IMACH(10) = 2
+               IMACH(14) = 56
+               IMACH(15) = -127
+               IMACH(16) = 127
+            ELSE IF ( SMALL(1) .EQ. 1267827943
+     *          .AND. SMALL(2) .EQ. 704643072) THEN
+*               *** IBM MAINFRAME ***
+               IMACH(10) = 16
+               IMACH(14) = 14
+               IMACH(15) = -64
+               IMACH(16) = 63
+            ELSE
+               WRITE(*,9010)
+               STOP 777
+               END IF
+            IMACH(11) = IMACH(14)
+            IMACH(12) = IMACH(15)
+            IMACH(13) = IMACH(16)
+         ELSE
+            RMACH = 1234567.
+            IF (SMALL(1) .EQ. 1234613304) THEN
+*               *** IEEE ***
+               IMACH(10) = 2
+               IMACH(11) = 24
+               IMACH(12) = -125
+               IMACH(13) = 128
+               IMACH(14) = 53
+               IMACH(15) = -1021
+               IMACH(16) = 1024
+               SC = 987
+            ELSE IF (SMALL(1) .EQ. -1271379306) THEN
+*               *** VAX ***
+               IMACH(10) = 2
+               IMACH(11) = 24
+               IMACH(12) = -127
+               IMACH(13) = 127
+               IMACH(14) = 56
+               IMACH(15) = -127
+               IMACH(16) = 127
+               SC = 987
+            ELSE IF (SMALL(1) .EQ. 1175639687) THEN
+*               *** IBM MAINFRAME ***
+               IMACH(10) = 16
+               IMACH(11) = 6
+               IMACH(12) = -64
+               IMACH(13) = 63
+               IMACH(14) = 14
+               IMACH(15) = -64
+               IMACH(16) = 63
+               SC = 987
+            ELSE IF (SMALL(1) .EQ. 1251390520) THEN
+*              *** CONVEX C-1 ***
+               IMACH(10) = 2
+               IMACH(11) = 24
+               IMACH(12) = -128
+               IMACH(13) = 127
+               IMACH(14) = 53
+               IMACH(15) = -1024
+               IMACH(16) = 1023
+            ELSE
+               DO 10 I3 = 1, 3
+                  J = SMALL(1) / 10000000
+                  K = SMALL(1) - 10000000*J
+                  IF (K .NE. T3E(I3)) GO TO 20
+                  SMALL(1) = J
+ 10               CONTINUE
+*              *** CRAY T3E ***
+               IMACH( 1) = 5
+               IMACH( 2) = 6
+               IMACH( 3) = 0
+               IMACH( 4) = 0
+               IMACH( 5) = 64
+               IMACH( 6) = 8
+               IMACH( 7) = 2
+               IMACH( 8) = 63
+               CALL I1MCR1(IMACH(9), K, 32767, 16777215, 16777215)
+               IMACH(10) = 2
+               IMACH(11) = 53
+               IMACH(12) = -1021
+               IMACH(13) = 1024
+               IMACH(14) = 53
+               IMACH(15) = -1021
+               IMACH(16) = 1024
+               GO TO 35
+ 20            CALL I1MCR1(J, K, 16405, 9876536, 0)
+               IF (SMALL(1) .NE. J) THEN
+                  WRITE(*,9020)
+                  STOP 777
+                  END IF
+*              *** CRAY 1, XMP, 2, AND 3 ***
+               IMACH(1) = 5
+               IMACH(2) = 6
+               IMACH(3) = 102
+               IMACH(4) = 6
+               IMACH(5) = 46
+               IMACH(6) = 8
+               IMACH(7) = 2
+               IMACH(8) = 45
+               CALL I1MCR1(IMACH(9), K, 0, 4194303, 16777215)
+               IMACH(10) = 2
+               IMACH(11) = 47
+               IMACH(12) = -8188
+               IMACH(13) = 8189
+               IMACH(14) = 94
+               IMACH(15) = -8141
+               IMACH(16) = 8189
+               GO TO 35
+               END IF
+            END IF
+         IMACH( 1) = 5
+         IMACH( 2) = 6
+         IMACH( 3) = 7
+         IMACH( 4) = 6
+         IMACH( 5) = 32
+         IMACH( 6) = 4
+         IMACH( 7) = 2
+         IMACH( 8) = 31
+         IMACH( 9) = 2147483647
+ 35      SC = 987
+         END IF
+ 9010 FORMAT(/' Adjust autodoubled I1MACH by uncommenting data'/
+     * ' statements appropriate for your machine and setting'/
+     * ' IMACH(I) = IMACH(I+3) for I = 11, 12, and 13.')
+ 9020 FORMAT(/' Adjust I1MACH by uncommenting data statements'/
+     * ' appropriate for your machine.')
+      IF (I .LT. 1  .OR.  I .GT. 16) GO TO 40
+      I1MACH = IMACH(I)
+      RETURN
+ 40   WRITE(*,*) 'I1MACH(I): I =',I,' is out of bounds.'
+      STOP
+* /* C source for I1MACH -- remove the * in column 1 */
+* /* Note that some values may need changing. */
+*#include <stdio.h>
+*#include <float.h>
+*#include <limits.h>
+*#include <math.h>
+*
+*long i1mach_(long *i)
+*{
+*	switch(*i){
+*	  case 1:  return 5;	/* standard input */
+*	  case 2:  return 6;	/* standard output */
+*	  case 3:  return 7;	/* standard punch */
+*	  case 4:  return 0;	/* standard error */
+*	  case 5:  return 32;	/* bits per integer */
+*	  case 6:  return sizeof(int);
+*	  case 7:  return 2;	/* base for integers */
+*	  case 8:  return 31;	/* digits of integer base */
+*	  case 9:  return LONG_MAX;
+*	  case 10: return FLT_RADIX;
+*	  case 11: return FLT_MANT_DIG;
+*	  case 12: return FLT_MIN_EXP;
+*	  case 13: return FLT_MAX_EXP;
+*	  case 14: return DBL_MANT_DIG;
+*	  case 15: return DBL_MIN_EXP;
+*	  case 16: return DBL_MAX_EXP;
+*	  }
+*	fprintf(stderr, "invalid argument: i1mach(%ld)\n", *i);
+*	exit(1);return 0; /* some compilers demand return values */
+*}
+      END
+      SUBROUTINE I1MCR1(A, A1, B, C, D)
+**** SPECIAL COMPUTATION FOR OLD CRAY MACHINES ****
+      INTEGER A, A1, B, C, D
+      A1 = 16777216*B + C
+      A = 16777216*A1 + D
+      END
+      REAL FUNCTION R1MACH(I)
+      INTEGER I
+C
+C  SINGLE-PRECISION MACHINE CONSTANTS
+C  R1MACH(1) = B**(EMIN-1), THE SMALLEST POSITIVE MAGNITUDE.
+C  R1MACH(2) = B**EMAX*(1 - B**(-T)), THE LARGEST MAGNITUDE.
+C  R1MACH(3) = B**(-T), THE SMALLEST RELATIVE SPACING.
+C  R1MACH(4) = B**(1-T), THE LARGEST RELATIVE SPACING.
+C  R1MACH(5) = LOG10(B)
+C
+      INTEGER SMALL(2)
+      INTEGER LARGE(2)
+      INTEGER RIGHT(2)
+      INTEGER DIVER(2)
+      INTEGER LOG10(2)
+C     needs to be (2) for AUTODOUBLE, HARRIS SLASH 6, ...
+      INTEGER SC
+      SAVE SMALL, LARGE, RIGHT, DIVER, LOG10, SC
+      REAL RMACH(5)
+      EQUIVALENCE (RMACH(1),SMALL(1))
+      EQUIVALENCE (RMACH(2),LARGE(1))
+      EQUIVALENCE (RMACH(3),RIGHT(1))
+      EQUIVALENCE (RMACH(4),DIVER(1))
+      EQUIVALENCE (RMACH(5),LOG10(1))
+      INTEGER J, K, L, T3E(3)
+      DATA T3E(1) / 9777664 /
+      DATA T3E(2) / 5323660 /
+      DATA T3E(3) / 46980 /
+C  THIS VERSION ADAPTS AUTOMATICALLY TO MOST CURRENT MACHINES,
+C  INCLUDING AUTO-DOUBLE COMPILERS.
+C  TO COMPILE ON OLDER MACHINES, ADD A C IN COLUMN 1
+C  ON THE NEXT LINE
+      DATA SC/0/
+C  AND REMOVE THE C FROM COLUMN 1 IN ONE OF THE SECTIONS BELOW.
+C  CONSTANTS FOR EVEN OLDER MACHINES CAN BE OBTAINED BY
+C          mail netlib@research.bell-labs.com
+C          send old1mach from blas
+C  PLEASE SEND CORRECTIONS TO dmg OR ehg@bell-labs.com.
+C
+C     MACHINE CONSTANTS FOR THE HONEYWELL DPS 8/70 SERIES.
+C      DATA RMACH(1) / O402400000000 /
+C      DATA RMACH(2) / O376777777777 /
+C      DATA RMACH(3) / O714400000000 /
+C      DATA RMACH(4) / O716400000000 /
+C      DATA RMACH(5) / O776464202324 /, SC/987/
+C
+C     MACHINE CONSTANTS FOR PDP-11 FORTRANS SUPPORTING
+C     32-BIT INTEGERS (EXPRESSED IN INTEGER AND OCTAL).
+C      DATA SMALL(1) /    8388608 /
+C      DATA LARGE(1) / 2147483647 /
+C      DATA RIGHT(1) /  880803840 /
+C      DATA DIVER(1) /  889192448 /
+C      DATA LOG10(1) / 1067065499 /, SC/987/
+C      DATA RMACH(1) / O00040000000 /
+C      DATA RMACH(2) / O17777777777 /
+C      DATA RMACH(3) / O06440000000 /
+C      DATA RMACH(4) / O06500000000 /
+C      DATA RMACH(5) / O07746420233 /, SC/987/
+C
+C     MACHINE CONSTANTS FOR THE UNIVAC 1100 SERIES.
+C      DATA RMACH(1) / O000400000000 /
+C      DATA RMACH(2) / O377777777777 /
+C      DATA RMACH(3) / O146400000000 /
+C      DATA RMACH(4) / O147400000000 /
+C      DATA RMACH(5) / O177464202324 /, SC/987/
+C
+      IF (SC .NE. 987) THEN
+*        *** CHECK FOR AUTODOUBLE ***
+         SMALL(2) = 0
+         RMACH(1) = 1E13
+         IF (SMALL(2) .NE. 0) THEN
+*           *** AUTODOUBLED ***
+            IF (      SMALL(1) .EQ. 1117925532
+     *          .AND. SMALL(2) .EQ. -448790528) THEN
+*              *** IEEE BIG ENDIAN ***
+               SMALL(1) = 1048576
+               SMALL(2) = 0
+               LARGE(1) = 2146435071
+               LARGE(2) = -1
+               RIGHT(1) = 1017118720
+               RIGHT(2) = 0
+               DIVER(1) = 1018167296
+               DIVER(2) = 0
+               LOG10(1) = 1070810131
+               LOG10(2) = 1352628735
+            ELSE IF ( SMALL(2) .EQ. 1117925532
+     *          .AND. SMALL(1) .EQ. -448790528) THEN
+*              *** IEEE LITTLE ENDIAN ***
+               SMALL(2) = 1048576
+               SMALL(1) = 0
+               LARGE(2) = 2146435071
+               LARGE(1) = -1
+               RIGHT(2) = 1017118720
+               RIGHT(1) = 0
+               DIVER(2) = 1018167296
+               DIVER(1) = 0
+               LOG10(2) = 1070810131
+               LOG10(1) = 1352628735
+            ELSE IF ( SMALL(1) .EQ. -2065213935
+     *          .AND. SMALL(2) .EQ. 10752) THEN
+*              *** VAX WITH D_FLOATING ***
+               SMALL(1) = 128
+               SMALL(2) = 0
+               LARGE(1) = -32769
+               LARGE(2) = -1
+               RIGHT(1) = 9344
+               RIGHT(2) = 0
+               DIVER(1) = 9472
+               DIVER(2) = 0
+               LOG10(1) = 546979738
+               LOG10(2) = -805796613
+            ELSE IF ( SMALL(1) .EQ. 1267827943
+     *          .AND. SMALL(2) .EQ. 704643072) THEN
+*              *** IBM MAINFRAME ***
+               SMALL(1) = 1048576
+               SMALL(2) = 0
+               LARGE(1) = 2147483647
+               LARGE(2) = -1
+               RIGHT(1) = 856686592
+               RIGHT(2) = 0
+               DIVER(1) = 873463808
+               DIVER(2) = 0
+               LOG10(1) = 1091781651
+               LOG10(2) = 1352628735
+            ELSE
+               WRITE(*,9010)
+               STOP 777
+               END IF
+         ELSE
+            RMACH(1) = 1234567.
+            IF (SMALL(1) .EQ. 1234613304) THEN
+*              *** IEEE ***
+               SMALL(1) = 8388608
+               LARGE(1) = 2139095039
+               RIGHT(1) = 864026624
+               DIVER(1) = 872415232
+               LOG10(1) = 1050288283
+            ELSE IF (SMALL(1) .EQ. -1271379306) THEN
+*              *** VAX ***
+               SMALL(1) = 128
+               LARGE(1) = -32769
+               RIGHT(1) = 13440
+               DIVER(1) = 13568
+               LOG10(1) = 547045274
+            ELSE IF (SMALL(1) .EQ. 1175639687) THEN
+*              *** IBM MAINFRAME ***
+               SMALL(1) = 1048576
+               LARGE(1) = 2147483647
+               RIGHT(1) = 990904320
+               DIVER(1) = 1007681536
+               LOG10(1) = 1091781651
+            ELSE IF (SMALL(1) .EQ. 1251390520) THEN
+*              *** CONVEX C-1 ***
+               SMALL(1) = 8388608
+               LARGE(1) = 2147483647
+               RIGHT(1) = 880803840
+               DIVER(1) = 889192448
+               LOG10(1) = 1067065499
+            ELSE
+               DO 10 L = 1, 3
+                  J = SMALL(1) / 10000000
+                  K = SMALL(1) - 10000000*J
+                  IF (K .NE. T3E(L)) GO TO 20
+                  SMALL(1) = J
+ 10               CONTINUE
+*              *** CRAY T3E ***
+               CALL I1MCRA(SMALL, K, 16, 0, 0)
+               CALL I1MCRA(LARGE, K, 32751, 16777215, 16777215)
+               CALL I1MCRA(RIGHT, K, 15520, 0, 0)
+               CALL I1MCRA(DIVER, K, 15536, 0, 0)
+               CALL I1MCRA(LOG10, K, 16339, 4461392, 10451455)
+               GO TO 30
+ 20            CALL I1MCRA(J, K, 16405, 9876536, 0)
+               IF (SMALL(1) .NE. J) THEN
+                  WRITE(*,9020)
+                  STOP 777
+                  END IF
+*              *** CRAY 1, XMP, 2, AND 3 ***
+               CALL I1MCRA(SMALL(1), K, 8195, 8388608, 1)
+               CALL I1MCRA(LARGE(1), K, 24574, 16777215, 16777214)
+               CALL I1MCRA(RIGHT(1), K, 16338, 8388608, 0)
+               CALL I1MCRA(DIVER(1), K, 16339, 8388608, 0)
+               CALL I1MCRA(LOG10(1), K, 16383, 10100890, 8715216)
+               END IF
+            END IF
+ 30      SC = 987
+         END IF
+*     SANITY CHECK
+      IF (RMACH(4) .GE. 1.0) STOP 776
+      IF (I .LT. 1 .OR. I .GT. 5) THEN
+         WRITE(*,*) 'R1MACH(I): I =',I,' is out of bounds.'
+         STOP
+         END IF
+      R1MACH = RMACH(I)
+      RETURN
+ 9010 FORMAT(/' Adjust autodoubled R1MACH by getting data'/
+     *' appropriate for your machine from D1MACH.')
+ 9020 FORMAT(/' Adjust R1MACH by uncommenting data statements'/
+     *' appropriate for your machine.')
+* /* C source for R1MACH -- remove the * in column 1 */
+*#include <stdio.h>
+*#include <float.h>
+*#include <math.h>
+*float r1mach_(long *i)
+*{
+*	switch(*i){
+*	  case 1: return FLT_MIN;
+*	  case 2: return FLT_MAX;
+*	  case 3: return FLT_EPSILON/FLT_RADIX;
+*	  case 4: return FLT_EPSILON;
+*	  case 5: return log10((double)FLT_RADIX);
+*	  }
+*	fprintf(stderr, "invalid argument: r1mach(%ld)\n", *i);
+*	exit(1); return 0; /* else complaint of missing return value */
+*}
+      END
+      SUBROUTINE I1MCRA(A, A1, B, C, D)
+**** SPECIAL COMPUTATION FOR CRAY MACHINES ****
+      INTEGER A, A1, B, C, D
+      A1 = 16777216*B + C
+      A = 16777216*A1 + D
+      END
+      DOUBLE PRECISION FUNCTION D1MACH(I)
+      INTEGER I
+C
+C  DOUBLE-PRECISION MACHINE CONSTANTS
+C  D1MACH( 1) = B**(EMIN-1), THE SMALLEST POSITIVE MAGNITUDE.
+C  D1MACH( 2) = B**EMAX*(1 - B**(-T)), THE LARGEST MAGNITUDE.
+C  D1MACH( 3) = B**(-T), THE SMALLEST RELATIVE SPACING.
+C  D1MACH( 4) = B**(1-T), THE LARGEST RELATIVE SPACING.
+C  D1MACH( 5) = LOG10(B)
+C
+      INTEGER SMALL(2)
+      INTEGER LARGE(2)
+      INTEGER RIGHT(2)
+      INTEGER DIVER(2)
+      INTEGER LOG10(2)
+      INTEGER SC, CRAY1(38), J
+      COMMON /D9MACH/ CRAY1
+      SAVE SMALL, LARGE, RIGHT, DIVER, LOG10, SC
+      DOUBLE PRECISION DMACH(5)
+      EQUIVALENCE (DMACH(1),SMALL(1))
+      EQUIVALENCE (DMACH(2),LARGE(1))
+      EQUIVALENCE (DMACH(3),RIGHT(1))
+      EQUIVALENCE (DMACH(4),DIVER(1))
+      EQUIVALENCE (DMACH(5),LOG10(1))
+C  THIS VERSION ADAPTS AUTOMATICALLY TO MOST CURRENT MACHINES.
+C  R1MACH CAN HANDLE AUTO-DOUBLE COMPILING, BUT THIS VERSION OF
+C  D1MACH DOES NOT, BECAUSE WE DO NOT HAVE QUAD CONSTANTS FOR
+C  MANY MACHINES YET.
+C  TO COMPILE ON OLDER MACHINES, ADD A C IN COLUMN 1
+C  ON THE NEXT LINE
+      DATA SC/0/
+C  AND REMOVE THE C FROM COLUMN 1 IN ONE OF THE SECTIONS BELOW.
+C  CONSTANTS FOR EVEN OLDER MACHINES CAN BE OBTAINED BY
+C          mail netlib@research.bell-labs.com
+C          send old1mach from blas
+C  PLEASE SEND CORRECTIONS TO dmg OR ehg@bell-labs.com.
+C
+C     MACHINE CONSTANTS FOR THE HONEYWELL DPS 8/70 SERIES.
+C      DATA SMALL(1),SMALL(2) / O402400000000, O000000000000 /
+C      DATA LARGE(1),LARGE(2) / O376777777777, O777777777777 /
+C      DATA RIGHT(1),RIGHT(2) / O604400000000, O000000000000 /
+C      DATA DIVER(1),DIVER(2) / O606400000000, O000000000000 /
+C      DATA LOG10(1),LOG10(2) / O776464202324, O117571775714 /, SC/987/
+C
+C     MACHINE CONSTANTS FOR PDP-11 FORTRANS SUPPORTING
+C     32-BIT INTEGERS.
+C      DATA SMALL(1),SMALL(2) /    8388608,           0 /
+C      DATA LARGE(1),LARGE(2) / 2147483647,          -1 /
+C      DATA RIGHT(1),RIGHT(2) /  612368384,           0 /
+C      DATA DIVER(1),DIVER(2) /  620756992,           0 /
+C      DATA LOG10(1),LOG10(2) / 1067065498, -2063872008 /, SC/987/
+C
+C     MACHINE CONSTANTS FOR THE UNIVAC 1100 SERIES.
+C      DATA SMALL(1),SMALL(2) / O000040000000, O000000000000 /
+C      DATA LARGE(1),LARGE(2) / O377777777777, O777777777777 /
+C      DATA RIGHT(1),RIGHT(2) / O170540000000, O000000000000 /
+C      DATA DIVER(1),DIVER(2) / O170640000000, O000000000000 /
+C      DATA LOG10(1),LOG10(2) / O177746420232, O411757177572 /, SC/987/
+C
+C     ON FIRST CALL, IF NO DATA UNCOMMENTED, TEST MACHINE TYPES.
+      IF (SC .NE. 987) THEN
+         DMACH(1) = 1.D13
+         IF (      SMALL(1) .EQ. 1117925532
+     *       .AND. SMALL(2) .EQ. -448790528) THEN
+*           *** IEEE BIG ENDIAN ***
+            SMALL(1) = 1048576
+            SMALL(2) = 0
+            LARGE(1) = 2146435071
+            LARGE(2) = -1
+            RIGHT(1) = 1017118720
+            RIGHT(2) = 0
+            DIVER(1) = 1018167296
+            DIVER(2) = 0
+            LOG10(1) = 1070810131
+            LOG10(2) = 1352628735
+         ELSE IF ( SMALL(2) .EQ. 1117925532
+     *       .AND. SMALL(1) .EQ. -448790528) THEN
+*           *** IEEE LITTLE ENDIAN ***
+            SMALL(2) = 1048576
+            SMALL(1) = 0
+            LARGE(2) = 2146435071
+            LARGE(1) = -1
+            RIGHT(2) = 1017118720
+            RIGHT(1) = 0
+            DIVER(2) = 1018167296
+            DIVER(1) = 0
+            LOG10(2) = 1070810131
+            LOG10(1) = 1352628735
+         ELSE IF ( SMALL(1) .EQ. -2065213935
+     *       .AND. SMALL(2) .EQ. 10752) THEN
+*               *** VAX WITH D_FLOATING ***
+            SMALL(1) = 128
+            SMALL(2) = 0
+            LARGE(1) = -32769
+            LARGE(2) = -1
+            RIGHT(1) = 9344
+            RIGHT(2) = 0
+            DIVER(1) = 9472
+            DIVER(2) = 0
+            LOG10(1) = 546979738
+            LOG10(2) = -805796613
+         ELSE IF ( SMALL(1) .EQ. 1267827943
+     *       .AND. SMALL(2) .EQ. 704643072) THEN
+*               *** IBM MAINFRAME ***
+            SMALL(1) = 1048576
+            SMALL(2) = 0
+            LARGE(1) = 2147483647
+            LARGE(2) = -1
+            RIGHT(1) = 856686592
+            RIGHT(2) = 0
+            DIVER(1) = 873463808
+            DIVER(2) = 0
+            LOG10(1) = 1091781651
+            LOG10(2) = 1352628735
+         ELSE IF ( SMALL(1) .EQ. 1120022684
+     *       .AND. SMALL(2) .EQ. -448790528) THEN
+*           *** CONVEX C-1 ***
+            SMALL(1) = 1048576
+            SMALL(2) = 0
+            LARGE(1) = 2147483647
+            LARGE(2) = -1
+            RIGHT(1) = 1019215872
+            RIGHT(2) = 0
+            DIVER(1) = 1020264448
+            DIVER(2) = 0
+            LOG10(1) = 1072907283
+            LOG10(2) = 1352628735
+         ELSE IF ( SMALL(1) .EQ. 815547074
+     *       .AND. SMALL(2) .EQ. 58688) THEN
+*           *** VAX G-FLOATING ***
+            SMALL(1) = 16
+            SMALL(2) = 0
+            LARGE(1) = -32769
+            LARGE(2) = -1
+            RIGHT(1) = 15552
+            RIGHT(2) = 0
+            DIVER(1) = 15568
+            DIVER(2) = 0
+            LOG10(1) = 1142112243
+            LOG10(2) = 2046775455
+         ELSE
+            DMACH(2) = 1.D27 + 1
+            DMACH(3) = 1.D27
+            LARGE(2) = LARGE(2) - RIGHT(2)
+            IF (LARGE(2) .EQ. 64 .AND. SMALL(2) .EQ. 0) THEN
+               CRAY1(1) = 67291416
+               DO 10 J = 1, 20
+                  CRAY1(J+1) = CRAY1(J) + CRAY1(J)
+ 10               CONTINUE
+               CRAY1(22) = CRAY1(21) + 321322
+               DO 20 J = 22, 37
+                  CRAY1(J+1) = CRAY1(J) + CRAY1(J)
+ 20               CONTINUE
+               IF (CRAY1(38) .EQ. SMALL(1)) THEN
+*                  *** CRAY ***
+                  CALL I1MCRY(SMALL(1), J, 8285, 8388608, 0)
+                  SMALL(2) = 0
+                  CALL I1MCRY(LARGE(1), J, 24574, 16777215, 16777215)
+                  CALL I1MCRY(LARGE(2), J, 0, 16777215, 16777214)
+                  CALL I1MCRY(RIGHT(1), J, 16291, 8388608, 0)
+                  RIGHT(2) = 0
+                  CALL I1MCRY(DIVER(1), J, 16292, 8388608, 0)
+                  DIVER(2) = 0
+                  CALL I1MCRY(LOG10(1), J, 16383, 10100890, 8715215)
+                  CALL I1MCRY(LOG10(2), J, 0, 16226447, 9001388)
+               ELSE
+                  WRITE(*,9000)
+                  STOP 779
+                  END IF
+            ELSE
+               WRITE(*,9000)
+               STOP 779
+               END IF
+            END IF
+         SC = 987
+         END IF
+*    SANITY CHECK
+      IF (DMACH(4) .GE. 1.0D0) STOP 778
+      IF (I .LT. 1 .OR. I .GT. 5) THEN
+         WRITE(*,*) 'D1MACH(I): I =',I,' is out of bounds.'
+         STOP
+         END IF
+      D1MACH = DMACH(I)
+      RETURN
+ 9000 FORMAT(/' Adjust D1MACH by uncommenting data statements'/
+     *' appropriate for your machine.')
+* /* Standard C source for D1MACH -- remove the * in column 1 */
+*#include <stdio.h>
+*#include <float.h>
+*#include <math.h>
+*double d1mach_(long *i)
+*{
+*	switch(*i){
+*	  case 1: return DBL_MIN;
+*	  case 2: return DBL_MAX;
+*	  case 3: return DBL_EPSILON/FLT_RADIX;
+*	  case 4: return DBL_EPSILON;
+*	  case 5: return log10((double)FLT_RADIX);
+*	  }
+*	fprintf(stderr, "invalid argument: d1mach(%ld)\n", *i);
+*	exit(1); return 0; /* some compilers demand return values */
+*}
+      END
+      SUBROUTINE I1MCRY(A, A1, B, C, D)
+**** SPECIAL COMPUTATION FOR OLD CRAY MACHINES ****
+      INTEGER A, A1, B, C, D
+      A1 = 16777216*B + C
+      A = 16777216*A1 + D
+      END
+*DECK FDUMP
+      SUBROUTINE FDUMP
+C***BEGIN PROLOGUE  FDUMP
+C***DATE WRITTEN   790801   (YYMMDD)
+C***REVISION DATE  820801   (YYMMDD)
+C***CATEGORY NO.  Z
+C***KEYWORDS  ERROR,XERROR PACKAGE
+C***AUTHOR  JONES, R. E., (SNLA)
+C***PURPOSE  Symbolic dump (should be locally written).
+C***DESCRIPTION
+C        ***Note*** Machine Dependent Routine
+C        FDUMP is intended to be replaced by a locally written
+C        version which produces a symbolic dump.  Failing this,
+C        it should be replaced by a version which prints the
+C        subprogram nesting list.  Note that this dump must be
+C        printed on each of up to five files, as indicated by the
+C        XGETUA routine.  See XSETUA and XGETUA for details.
+C
+C     Written by Ron Jones, with SLATEC Common Math Library Subcommittee
+C     Latest revision ---  23 May 1979
+C***ROUTINES CALLED  (NONE)
+C***END PROLOGUE  FDUMP
+C***FIRST EXECUTABLE STATEMENT  FDUMP
+      RETURN
+      END
+*DECK J4SAVE
+      FUNCTION J4SAVE(IWHICH,IVALUE,ISET)
+C***BEGIN PROLOGUE  J4SAVE
+C***REFER TO  XERROR
+C     Abstract
+C        J4SAVE saves and recalls several global variables needed
+C        by the library error handling routines.
+C
+C     Description of Parameters
+C      --Input--
+C        IWHICH - Index of item desired.
+C                = 1 Refers to current error number.
+C                = 2 Refers to current error control flag.
+C                 = 3 Refers to current unit number to which error
+C                    messages are to be sent.  (0 means use standard.)
+C                 = 4 Refers to the maximum number of times any
+C                     message is to be printed (as set by XERMAX).
+C                 = 5 Refers to the total number of units to which
+C                     each error message is to be written.
+C                 = 6 Refers to the 2nd unit for error messages
+C                 = 7 Refers to the 3rd unit for error messages
+C                 = 8 Refers to the 4th unit for error messages
+C                 = 9 Refers to the 5th unit for error messages
+C        IVALUE - The value to be set for the IWHICH-th parameter,
+C                 if ISET is .TRUE. .
+C        ISET   - If ISET=.TRUE., the IWHICH-th parameter will BE
+C                 given the value, IVALUE.  If ISET=.FALSE., the
+C                 IWHICH-th parameter will be unchanged, and IVALUE
+C                 is a dummy parameter.
+C      --Output--
+C        The (old) value of the IWHICH-th parameter will be returned
+C        in the function value, J4SAVE.
+C
+C     Written by Ron Jones, with SLATEC Common Math Library Subcommittee
+C    Adapted from Bell Laboratories PORT Library Error Handler
+C     Latest revision ---  23 MAY 1979
+C***REFERENCES  JONES R.E., KAHANER D.K., "XERROR, THE SLATEC ERROR-
+C                 HANDLING PACKAGE", SAND82-0800, SANDIA LABORATORIES,
+C                 1982.
+C***ROUTINES CALLED  (NONE)
+C***END PROLOGUE  J4SAVE
+      LOGICAL ISET
+      INTEGER IPARAM(9)
+      SAVE IPARAM
+      DATA IPARAM(1),IPARAM(2),IPARAM(3),IPARAM(4)/0,2,0,10/
+      DATA IPARAM(5)/1/
+      DATA IPARAM(6),IPARAM(7),IPARAM(8),IPARAM(9)/0,0,0,0/
+C***FIRST EXECUTABLE STATEMENT  J4SAVE
+      J4SAVE = IPARAM(IWHICH)
+      IF (ISET) IPARAM(IWHICH) = IVALUE
+      RETURN
+      END
+*DECK NUMXER
+      FUNCTION NUMXER(NERR)
+C***BEGIN PROLOGUE  NUMXER
+C***REFER TO  XERROR
+C     Abstract
+C        NUMXER returns the most recent error number,
+C        in both NUMXER and the parameter NERR.
+C
+C     Written by Ron Jones, with SLATEC Common Math Library Subcommittee
+C     Latest revision ---  7 JUNE 1978
+C***REFERENCES  JONES R.E., KAHANER D.K., "XERROR, THE SLATEC ERROR-
+C                 HANDLING PACKAGE", SAND82-0800, SANDIA LABORATORIES,
+C                 1982.
+C***ROUTINES CALLED  J4SAVE
+C***END PROLOGUE  NUMXER
+C***FIRST EXECUTABLE STATEMENT  NUMXER
+      NERR = J4SAVE(1,0,.FALSE.)
+      NUMXER = NERR
+      RETURN
+      END
+*DECK XERABT
+      SUBROUTINE XERABT(MESSG,NMESSG)
+C***BEGIN PROLOGUE  XERABT
+C***DATE WRITTEN   790801   (YYMMDD)
+C***REVISION DATE  820801   (YYMMDD)
+C***CATEGORY NO.  R3C
+C***KEYWORDS  ERROR,XERROR PACKAGE
+C***AUTHOR  JONES, R. E., (SNLA)
+C***PURPOSE  Aborts program execution and prints error message.
+C***DESCRIPTION
+C     Abstract
+C        ***Note*** machine dependent routine
+C        XERABT aborts the execution of the program.
+C        The error message causing the abort is given in the calling
+C        sequence, in case one needs it for printing on a dayfile,
+C        for example.
+C
+C     Description of Parameters
+C        MESSG and NMESSG are as in XERROR, except that NMESSG may
+C        be zero, in which case no message is being supplied.
+C
+C     Written by Ron Jones, with SLATEC Common Math Library Subcommittee
+C     Latest revision ---  19 MAR 1980
+C***REFERENCES  JONES R.E., KAHANER D.K., "XERROR, THE SLATEC ERROR-
+C                 HANDLING PACKAGE", SAND82-0800, SANDIA LABORATORIES,
+C                 1982.
+C***ROUTINES CALLED  (NONE)
+C***END PROLOGUE  XERABT
+      CHARACTER*(*) MESSG
+C***FIRST EXECUTABLE STATEMENT  XERABT
+      STOP
+      END
+*DECK XERCLR
+      SUBROUTINE XERCLR
+C***BEGIN PROLOGUE  XERCLR
+C***DATE WRITTEN   790801   (YYMMDD)
+C***REVISION DATE  820801   (YYMMDD)
+C***CATEGORY NO.  R3C
+C***KEYWORDS  ERROR,XERROR PACKAGE
+C***AUTHOR  JONES, R. E., (SNLA)
+C***PURPOSE  Resets current error number to zero.
+C***DESCRIPTION
+C     Abstract
+C        This routine simply resets the current error number to zero.
+C        This may be necessary to do in order to determine that
+C        a certain error has occurred again since the last time
+C        NUMXER was referenced.
+C
+C     Written by Ron Jones, with SLATEC Common Math Library Subcommittee
+C     Latest revision ---  7 June 1978
+C***REFERENCES  JONES R.E., KAHANER D.K., "XERROR, THE SLATEC ERROR-
+C                 HANDLING PACKAGE", SAND82-0800, SANDIA LABORATORIES,
+C                 1982.
+C***ROUTINES CALLED  J4SAVE
+C***END PROLOGUE  XERCLR
+C***FIRST EXECUTABLE STATEMENT  XERCLR
+      JUNK = J4SAVE(1,0,.TRUE.)
+      RETURN
+      END
+*DECK XERCTL
+      SUBROUTINE XERCTL(MESSG1,NMESSG,NERR,LEVEL,KONTRL)
+C***BEGIN PROLOGUE  XERCTL
+C***DATE WRITTEN   790801   (YYMMDD)
+C***REVISION DATE  820801   (YYMMDD)
+C***CATEGORY NO.  R3C
+C***KEYWORDS  ERROR,XERROR PACKAGE
+C***AUTHOR  JONES, R. E., (SNLA)
+C***PURPOSE  Allows user control over handling of individual errors.
+C***DESCRIPTION
+C     Abstract
+C        Allows user control over handling of individual errors.
+C        Just after each message is recorded, but before it is
+C        processed any further (i.e., before it is printed or
+C        a decision to abort is made), a call is made to XERCTL.
+C        If the user has provided his own version of XERCTL, he
+C        can then override the value of KONTROL used in processing
+C        this message by redefining its value.
+C        KONTRL may be set to any value from -2 to 2.
+C        The meanings for KONTRL are the same as in XSETF, except
+C        that the value of KONTRL changes only for this message.
+C        If KONTRL is set to a value outside the range from -2 to 2,
+C        it will be moved back into that range.
+C
+C     Description of Parameters
+C
+C      --Input--
+C        MESSG1 - the first word (only) of the error message.
+C        NMESSG - same as in the call to XERROR or XERRWV.
+C        NERR   - same as in the call to XERROR or XERRWV.
+C        LEVEL  - same as in the call to XERROR or XERRWV.
+C        KONTRL - the current value of the control flag as set
+C                 by a call to XSETF.
+C
+C      --Output--
+C        KONTRL - the new value of KONTRL.  If KONTRL is not
+C                 defined, it will remain at its original value.
+C                 This changed value of control affects only
+C                 the current occurrence of the current message.
+C***REFERENCES  JONES R.E., KAHANER D.K., "XERROR, THE SLATEC ERROR-
+C                 HANDLING PACKAGE", SAND82-0800, SANDIA LABORATORIES,
+C                 1982.
+C***ROUTINES CALLED  (NONE)
+C***END PROLOGUE  XERCTL
+      CHARACTER*20 MESSG1
+C***FIRST EXECUTABLE STATEMENT  XERCTL
+      RETURN
+      END
+*DECK XERDMP
+      SUBROUTINE XERDMP
+C***BEGIN PROLOGUE  XERDMP
+C***DATE WRITTEN   790801   (YYMMDD)
+C***REVISION DATE  820801   (YYMMDD)
+C***CATEGORY NO.  R3C
+C***KEYWORDS  ERROR,XERROR PACKAGE
+C***AUTHOR  JONES, R. E., (SNLA)
+C***PURPOSE  Prints the error tables and then clears them.
+C***DESCRIPTION
+C     Abstract
+C        XERDMP prints the error tables, then clears them.
+C
+C     Written by Ron Jones, with SLATEC Common Math Library Subcommittee
+C     Latest revision ---  7 June 1978
+C***REFERENCES  JONES R.E., KAHANER D.K., "XERROR, THE SLATEC ERROR-
+C                 HANDLING PACKAGE", SAND82-0800, SANDIA LABORATORIES,
+C                 1982.
+C***ROUTINES CALLED  XERSAV
+C***END PROLOGUE  XERDMP
+C***FIRST EXECUTABLE STATEMENT  XERDMP
+      CALL XERSAV(' ',0,0,0,KOUNT)
+      RETURN
+      END
+*DECK XERMAX
+      SUBROUTINE XERMAX(MAX)
+C***BEGIN PROLOGUE  XERMAX
+C***DATE WRITTEN   790801   (YYMMDD)
+C***REVISION DATE  820801   (YYMMDD)
+C***CATEGORY NO.  R3C
+C***KEYWORDS  ERROR,XERROR PACKAGE
+C***AUTHOR  JONES, R. E., (SNLA)
+C***PURPOSE  Sets maximum number of times any error message is to be
+C            printed.
+C***DESCRIPTION
+C     Abstract
+C        XERMAX sets the maximum number of times any message
+C        is to be printed.  That is, non-fatal messages are
+C        not to be printed after they have occured MAX times.
+C        Such non-fatal messages may be printed less than
+C        MAX times even if they occur MAX times, if error
+C        suppression mode (KONTRL=0) is ever in effect.
+C
+C     Description of Parameter
+C      --Input--
+C        MAX - the maximum number of times any one message
+C              is to be printed.
+C
+C     Written by Ron Jones, with SLATEC Common Math Library Subcommittee
+C     Latest revision ---  7 June 1978
+C***REFERENCES  JONES R.E., KAHANER D.K., "XERROR, THE SLATEC ERROR-
+C                 HANDLING PACKAGE", SAND82-0800, SANDIA LABORATORIES,
+C                 1982.
+C***ROUTINES CALLED  J4SAVE
+C***END PROLOGUE  XERMAX
+C***FIRST EXECUTABLE STATEMENT  XERMAX
+      JUNK = J4SAVE(4,MAX,.TRUE.)
+      RETURN
+      END
+*DECK XERPRT
+      SUBROUTINE XERPRT(MESSG,NMESSG)
+C***BEGIN PROLOGUE  XERPRT
+C***DATE WRITTEN   790801   (YYMMDD)
+C***REVISION DATE  820801   (YYMMDD)
+C***CATEGORY NO.  Z
+C***KEYWORDS  ERROR,XERROR PACKAGE
+C***AUTHOR  JONES, R. E., (SNLA)
+C***PURPOSE  Prints error messages.
+C***DESCRIPTION
+C     Abstract
+C        Print the Hollerith message in MESSG, of length NMESSG,
+C        on each file indicated by XGETUA.
+C     Latest revision ---  19 MAR 1980
+C***REFERENCES  JONES R.E., KAHANER D.K., "XERROR, THE SLATEC ERROR-
+C                 HANDLING PACKAGE", SAND82-0800, SANDIA LABORATORIES,
+C                 1982.
+C***ROUTINES CALLED  I1MACH,S88FMT,XGETUA
+C***END PROLOGUE  XERPRT
+      INTEGER LUN(5)
+      CHARACTER*(*) MESSG
+C     OBTAIN UNIT NUMBERS AND WRITE LINE TO EACH UNIT
+C***FIRST EXECUTABLE STATEMENT  XERPRT
+      CALL XGETUA(LUN,NUNIT)
+      LENMES = LEN(MESSG)
+      DO 20 KUNIT=1,NUNIT
+         IUNIT = LUN(KUNIT)
+         IF (IUNIT.EQ.0) IUNIT = I1MACH(4)
+         DO 10 ICHAR=1,LENMES,72
+            LAST = MIN0(ICHAR+71 , LENMES)
+            WRITE (IUNIT,'(1X,A)') MESSG(ICHAR:LAST)
+   10    CONTINUE
+   20 CONTINUE
+      RETURN
+      END
+*DECK XERROR
+      SUBROUTINE XERROR(MESSG,NMESSG,NERR,LEVEL)
+C***BEGIN PROLOGUE  XERROR
+C***DATE WRITTEN   790801   (YYMMDD)
+C***REVISION DATE  820801   (YYMMDD)
+C***CATEGORY NO.  R3C
+C***KEYWORDS  ERROR,XERROR PACKAGE
+C***AUTHOR  JONES, R. E., (SNLA)
+C***PURPOSE  Processes an error (diagnostic) message.
+C***DESCRIPTION
+C     Abstract
+C        XERROR processes a diagnostic message, in a manner
+C        determined by the value of LEVEL and the current value
+C        of the library error control flag, KONTRL.
+C        (See subroutine XSETF for details.)
+C
+C     Description of Parameters
+C      --Input--
+C        MESSG - the Hollerith message to be processed, containing
+C                no more than 72 characters.
+C        NMESSG- the actual number of characters in MESSG.
+C        NERR  - the error number associated with this message.
+C                NERR must not be zero.
+C        LEVEL - error category.
+C                =2 means this is an unconditionally fatal error.
+C                =1 means this is a recoverable error.  (I.e., it is
+C                   non-fatal if XSETF has been appropriately called.)
+C                =0 means this is a warning message only.
+C                =-1 means this is a warning message which is to be
+C                   printed at most once, regardless of how many
+C                   times this call is executed.
+C
+C     Examples
+C        CALL XERROR('SMOOTH -- NUM WAS ZERO.',23,1,2)
+C        CALL XERROR('INTEG  -- LESS THAN FULL ACCURACY ACHIEVED.',
+C                    43,2,1)
+C        CALL XERROR('ROOTER -- ACTUAL ZERO OF F FOUND BEFORE INTERVAL F
+C    1ULLY COLLAPSED.',65,3,0)
+C        CALL XERROR('EXP    -- UNDERFLOWS BEING SET TO ZERO.',39,1,-1)
+C
+C     Latest revision ---  19 MAR 1980
+C     Written by Ron Jones, with SLATEC Common Math Library Subcommittee
+C***REFERENCES  JONES R.E., KAHANER D.K., "XERROR, THE SLATEC ERROR-
+C                 HANDLING PACKAGE", SAND82-0800, SANDIA LABORATORIES,
+C                 1982.
+C***ROUTINES CALLED  XERRWV
+C***END PROLOGUE  XERROR
+      CHARACTER*(*) MESSG
+C***FIRST EXECUTABLE STATEMENT  XERROR
+      CALL XERRWV(MESSG,NMESSG,NERR,LEVEL,0,0,0,0,0.,0.)
+      RETURN
+      END
+*DECK XERRWV
+      SUBROUTINE XERRWV(MESSG,NMESSG,NERR,LEVEL,NI,I1,I2,NR,R1,R2)
+C***BEGIN PROLOGUE  XERRWV
+C***DATE WRITTEN   800319   (YYMMDD)
+C***REVISION DATE  820801   (YYMMDD)
+C***CATEGORY NO.  R3C
+C***KEYWORDS  ERROR,XERROR PACKAGE
+C***AUTHOR  JONES, R. E., (SNLA)
+C***PURPOSE  Processes error message allowing 2 integer and two real
+C            values to be included in the message.
+C***DESCRIPTION
+C     Abstract
+C        XERRWV processes a diagnostic message, in a manner
+C        determined by the value of LEVEL and the current value
+C        of the library error control flag, KONTRL.
+C        (See subroutine XSETF for details.)
+C        In addition, up to two integer values and two real
+C        values may be printed along with the message.
+C
+C     Description of Parameters
+C      --Input--
+C        MESSG - the Hollerith message to be processed.
+C        NMESSG- the actual number of characters in MESSG.
+C        NERR  - the error number associated with this message.
+C                NERR must not be zero.
+C        LEVEL - error category.
+C                =2 means this is an unconditionally fatal error.
+C                =1 means this is a recoverable error.  (I.e., it is
+C                   non-fatal if XSETF has been appropriately called.)
+C                =0 means this is a warning message only.
+C                =-1 means this is a warning message which is to be
+C                   printed at most once, regardless of how many
+C                   times this call is executed.
+C        NI    - number of integer values to be printed. (0 to 2)
+C        I1    - first integer value.
+C        I2    - second integer value.
+C        NR    - number of real values to be printed. (0 to 2)
+C        R1    - first real value.
+C        R2    - second real value.
+C
+C     Examples
+C        CALL XERRWV('SMOOTH -- NUM (=I1) WAS ZERO.',29,1,2,
+C    1   1,NUM,0,0,0.,0.)
+C        CALL XERRWV('QUADXY -- REQUESTED ERROR (R1) LESS THAN MINIMUM (
+C    1R2).,54,77,1,0,0,0,2,ERRREQ,ERRMIN)
+C
+C     Latest revision ---  19 MAR 1980
+C     Written by Ron Jones, with SLATEC Common Math Library Subcommittee
+C***REFERENCES  JONES R.E., KAHANER D.K., "XERROR, THE SLATEC ERROR-
+C                 HANDLING PACKAGE", SAND82-0800, SANDIA LABORATORIES,
+C                 1982.
+C***ROUTINES CALLED  FDUMP,I1MACH,J4SAVE,XERABT,XERCTL,XERPRT,XERSAV,
+C                    XGETUA
+C***END PROLOGUE  XERRWV
+      CHARACTER*(*) MESSG
+      CHARACTER*20 LFIRST
+      CHARACTER*37 FORM
+      DIMENSION LUN(5)
+C     GET FLAGS
+C***FIRST EXECUTABLE STATEMENT  XERRWV
+      LKNTRL = J4SAVE(2,0,.FALSE.)
+      MAXMES = J4SAVE(4,0,.FALSE.)
+C     CHECK FOR VALID INPUT
+      IF ((NMESSG.GT.0).AND.(NERR.NE.0).AND.
+     1    (LEVEL.GE.(-1)).AND.(LEVEL.LE.2)) GO TO 10
+         IF (LKNTRL.GT.0) CALL XERPRT('FATAL ERROR IN...',17)
+         CALL XERPRT('XERROR -- INVALID INPUT',23)
+         IF (LKNTRL.GT.0) CALL FDUMP
+         IF (LKNTRL.GT.0) CALL XERPRT('JOB ABORT DUE TO FATAL ERROR.',
+     1  29)
+         IF (LKNTRL.GT.0) CALL XERSAV(' ',0,0,0,KDUMMY)
+         CALL XERABT('XERROR -- INVALID INPUT',23)
+         RETURN
+   10 CONTINUE
+C     RECORD MESSAGE
+      JUNK = J4SAVE(1,NERR,.TRUE.)
+      CALL XERSAV(MESSG,NMESSG,NERR,LEVEL,KOUNT)
+C     LET USER OVERRIDE
+      LFIRST = MESSG
+      LMESSG = NMESSG
+      LERR = NERR
+      LLEVEL = LEVEL
+      CALL XERCTL(LFIRST,LMESSG,LERR,LLEVEL,LKNTRL)
+C     RESET TO ORIGINAL VALUES
+      LMESSG = NMESSG
+      LERR = NERR
+      LLEVEL = LEVEL
+      LKNTRL = MAX0(-2,MIN0(2,LKNTRL))
+      MKNTRL = IABS(LKNTRL)
+C     DECIDE WHETHER TO PRINT MESSAGE
+      IF ((LLEVEL.LT.2).AND.(LKNTRL.EQ.0)) GO TO 100
+      IF (((LLEVEL.EQ.(-1)).AND.(KOUNT.GT.MIN0(1,MAXMES)))
+     1.OR.((LLEVEL.EQ.0)   .AND.(KOUNT.GT.MAXMES))
+     2.OR.((LLEVEL.EQ.1)   .AND.(KOUNT.GT.MAXMES).AND.(MKNTRL.EQ.1))
+     3.OR.((LLEVEL.EQ.2)   .AND.(KOUNT.GT.MAX0(1,MAXMES)))) GO TO 100
+         IF (LKNTRL.LE.0) GO TO 20
+            CALL XERPRT(' ',1)
+C           INTRODUCTION
+            IF (LLEVEL.EQ.(-1)) CALL XERPRT
+     1('WARNING MESSAGE...THIS MESSAGE WILL ONLY BE PRINTED ONCE.',57)
+            IF (LLEVEL.EQ.0) CALL XERPRT('WARNING IN...',13)
+            IF (LLEVEL.EQ.1) CALL XERPRT
+     1      ('RECOVERABLE ERROR IN...',23)
+            IF (LLEVEL.EQ.2) CALL XERPRT('FATAL ERROR IN...',17)
+   20    CONTINUE
+C        MESSAGE
+         CALL XERPRT(MESSG,LMESSG)
+         CALL XGETUA(LUN,NUNIT)
+         ISIZEI = LOG10(FLOAT(I1MACH(9))) + 1.0
+         ISIZEF = LOG10(FLOAT(I1MACH(10))**I1MACH(11)) + 1.0
+         DO 50 KUNIT=1,NUNIT
+            IUNIT = LUN(KUNIT)
+            IF (IUNIT.EQ.0) IUNIT = I1MACH(4)
+            DO 22 I=1,MIN(NI,2)
+               WRITE (FORM,21) I,ISIZEI
+   21          FORMAT ('(11X,21HIN ABOVE MESSAGE, I',I1,'=,I',I2,')   ')
+               IF (I.EQ.1) WRITE (IUNIT,FORM) I1
+               IF (I.EQ.2) WRITE (IUNIT,FORM) I2
+   22       CONTINUE
+            DO 24 I=1,MIN(NR,2)
+               WRITE (FORM,23) I,ISIZEF+10,ISIZEF
+   23          FORMAT ('(11X,21HIN ABOVE MESSAGE, R',I1,'=,E',
+     1         I2,'.',I2,')')
+               IF (I.EQ.1) WRITE (IUNIT,FORM) R1
+               IF (I.EQ.2) WRITE (IUNIT,FORM) R2
+   24       CONTINUE
+            IF (LKNTRL.LE.0) GO TO 40
+C              ERROR NUMBER
+               WRITE (IUNIT,30) LERR
+   30          FORMAT (15H ERROR NUMBER =,I10)
+   40       CONTINUE
+   50    CONTINUE
+C        TRACE-BACK
+         IF (LKNTRL.GT.0) CALL FDUMP
+  100 CONTINUE
+      IFATAL = 0
+      IF ((LLEVEL.EQ.2).OR.((LLEVEL.EQ.1).AND.(MKNTRL.EQ.2)))
+     1IFATAL = 1
+C     QUIT HERE IF MESSAGE IS NOT FATAL
+      IF (IFATAL.LE.0) RETURN
+      IF ((LKNTRL.LE.0).OR.(KOUNT.GT.MAX0(1,MAXMES))) GO TO 120
+C        PRINT REASON FOR ABORT
+         IF (LLEVEL.EQ.1) CALL XERPRT
+     1   ('JOB ABORT DUE TO UNRECOVERED ERROR.',35)
+         IF (LLEVEL.EQ.2) CALL XERPRT
+     1   ('JOB ABORT DUE TO FATAL ERROR.',29)
+C        PRINT ERROR SUMMARY
+         CALL XERSAV(' ',-1,0,0,KDUMMY)
+  120 CONTINUE
+C     ABORT
+      IF ((LLEVEL.EQ.2).AND.(KOUNT.GT.MAX0(1,MAXMES))) LMESSG = 0
+      CALL XERABT(MESSG,LMESSG)
+      RETURN
+      END
+*DECK XERSAV
+      SUBROUTINE XERSAV(MESSG,NMESSG,NERR,LEVEL,ICOUNT)
+C***BEGIN PROLOGUE  XERSAV
+C***DATE WRITTEN   800319   (YYMMDD)
+C***REVISION DATE  820801   (YYMMDD)
+C***CATEGORY NO.  Z
+C***KEYWORDS  ERROR,XERROR PACKAGE
+C***AUTHOR  JONES, R. E., (SNLA)
+C***PURPOSE  Records that an error occurred.
+C***DESCRIPTION
+C     Abstract
+C        Record that this error occurred.
+C
+C     Description of Parameters
+C     --Input--
+C       MESSG, NMESSG, NERR, LEVEL are as in XERROR,
+C       except that when NMESSG=0 the tables will be
+C       dumped and cleared, and when NMESSG is less than zero the
+C       tables will be dumped and not cleared.
+C     --Output--
+C       ICOUNT will be the number of times this message has
+C       been seen, or zero if the table has overflowed and
+C       does not contain this message specifically.
+C       When NMESSG=0, ICOUNT will not be altered.
+C
+C     Written by Ron Jones, with SLATEC Common Math Library Subcommittee
+C     Latest revision ---  19 Mar 1980
+C***REFERENCES  JONES R.E., KAHANER D.K., "XERROR, THE SLATEC ERROR-
+C                 HANDLING PACKAGE", SAND82-0800, SANDIA LABORATORIES,
+C                 1982.
+C***ROUTINES CALLED  I1MACH,S88FMT,XGETUA
+C***END PROLOGUE  XERSAV
+      INTEGER LUN(5)
+      CHARACTER*(*) MESSG
+      CHARACTER*20 MESTAB(10),MES
+      DIMENSION NERTAB(10),LEVTAB(10),KOUNT(10)
+      SAVE MESTAB,NERTAB,LEVTAB,KOUNT,KOUNTX
+C     NEXT TWO DATA STATEMENTS ARE NECESSARY TO PROVIDE A BLANK
+C     ERROR TABLE INITIALLY
+      DATA KOUNT(1),KOUNT(2),KOUNT(3),KOUNT(4),KOUNT(5),
+     1     KOUNT(6),KOUNT(7),KOUNT(8),KOUNT(9),KOUNT(10)
+     2     /0,0,0,0,0,0,0,0,0,0/
+      DATA KOUNTX/0/
+C***FIRST EXECUTABLE STATEMENT  XERSAV
+      IF (NMESSG.GT.0) GO TO 80
+C     DUMP THE TABLE
+         IF (KOUNT(1).EQ.0) RETURN
+C        PRINT TO EACH UNIT
+         CALL XGETUA(LUN,NUNIT)
+         DO 60 KUNIT=1,NUNIT
+            IUNIT = LUN(KUNIT)
+            IF (IUNIT.EQ.0) IUNIT = I1MACH(4)
+C           PRINT TABLE HEADER
+            WRITE (IUNIT,10)
+   10       FORMAT (32H0          ERROR MESSAGE SUMMARY/
+     1      51H MESSAGE START             NERR     LEVEL     COUNT)
+C           PRINT BODY OF TABLE
+            DO 20 I=1,10
+               IF (KOUNT(I).EQ.0) GO TO 30
+               WRITE (IUNIT,15) MESTAB(I),NERTAB(I),LEVTAB(I),KOUNT(I)
+   15          FORMAT (1X,A20,3I10)
+   20       CONTINUE
+   30       CONTINUE
+C           PRINT NUMBER OF OTHER ERRORS
+            IF (KOUNTX.NE.0) WRITE (IUNIT,40) KOUNTX
+   40       FORMAT (41H0OTHER ERRORS NOT INDIVIDUALLY TABULATED=,I10)
+            WRITE (IUNIT,50)
+   50       FORMAT (1X)
+   60    CONTINUE
+         IF (NMESSG.LT.0) RETURN
+C        CLEAR THE ERROR TABLES
+         DO 70 I=1,10
+   70       KOUNT(I) = 0
+         KOUNTX = 0
+         RETURN
+   80 CONTINUE
+C     PROCESS A MESSAGE...
+C     SEARCH FOR THIS MESSG, OR ELSE AN EMPTY SLOT FOR THIS MESSG,
+C     OR ELSE DETERMINE THAT THE ERROR TABLE IS FULL.
+      MES = MESSG
+      DO 90 I=1,10
+         II = I
+         IF (KOUNT(I).EQ.0) GO TO 110
+         IF (MES.NE.MESTAB(I)) GO TO 90
+         IF (NERR.NE.NERTAB(I)) GO TO 90
+         IF (LEVEL.NE.LEVTAB(I)) GO TO 90
+         GO TO 100
+   90 CONTINUE
+C     THREE POSSIBLE CASES...
+C     TABLE IS FULL
+         KOUNTX = KOUNTX+1
+         ICOUNT = 1
+         RETURN
+C     MESSAGE FOUND IN TABLE
+  100    KOUNT(II) = KOUNT(II) + 1
+         ICOUNT = KOUNT(II)
+         RETURN
+C     EMPTY SLOT FOUND FOR NEW MESSAGE
+  110    MESTAB(II) = MES
+         NERTAB(II) = NERR
+         LEVTAB(II) = LEVEL
+         KOUNT(II)  = 1
+         ICOUNT = 1
+         RETURN
+      END
+*DECK XGETF
+      SUBROUTINE XGETF(KONTRL)
+C***BEGIN PROLOGUE  XGETF
+C***DATE WRITTEN   790801   (YYMMDD)
+C***REVISION DATE  820801   (YYMMDD)
+C***CATEGORY NO.  R3C
+C***KEYWORDS  ERROR,XERROR PACKAGE
+C***AUTHOR  JONES, R. E., (SNLA)
+C***PURPOSE  Returns current value of error control flag.
+C***DESCRIPTION
+C   Abstract
+C        XGETF returns the current value of the error control flag
+C        in KONTRL.  See subroutine XSETF for flag value meanings.
+C        (KONTRL is an output parameter only.)
+C
+C     Written by Ron Jones, with SLATEC Common Math Library Subcommittee
+C     Latest revision ---  7 June 1978
+C***REFERENCES  JONES R.E., KAHANER D.K., "XERROR, THE SLATEC ERROR-
+C                 HANDLING PACKAGE", SAND82-0800, SANDIA LABORATORIES,
+C                 1982.
+C***ROUTINES CALLED  J4SAVE
+C***END PROLOGUE  XGETF
+C***FIRST EXECUTABLE STATEMENT  XGETF
+      KONTRL = J4SAVE(2,0,.FALSE.)
+      RETURN
+      END
+*DECK XGETUA
+      SUBROUTINE XGETUA(IUNITA,N)
+C***BEGIN PROLOGUE  XGETUA
+C***DATE WRITTEN   790801   (YYMMDD)
+C***REVISION DATE  820801   (YYMMDD)
+C***CATEGORY NO.  R3C
+C***KEYWORDS  ERROR,XERROR PACKAGE
+C***AUTHOR  JONES, R. E., (SNLA)
+C***PURPOSE  Returns unit number(s) to which error messages are being
+C            sent.
+C***DESCRIPTION
+C     Abstract
+C        XGETUA may be called to determine the unit number or numbers
+C        to which error messages are being sent.
+C        These unit numbers may have been set by a call to XSETUN,
+C        or a call to XSETUA, or may be a default value.
+C
+C     Description of Parameters
+C      --Output--
+C        IUNIT - an array of one to five unit numbers, depending
+C                on the value of N.  A value of zero refers to the
+C                default unit, as defined by the I1MACH machine
+C                constant routine.  Only IUNIT(1),...,IUNIT(N) are
+C                defined by XGETUA.  The values of IUNIT(N+1),...,
+C                IUNIT(5) are not defined (for N .LT. 5) or altered
+C                in any way by XGETUA.
+C        N     - the number of units to which copies of the
+C                error messages are being sent.  N will be in the
+C                range from 1 to 5.
+C
+C     Latest revision ---  19 MAR 1980
+C     Written by Ron Jones, with SLATEC Common Math Library Subcommittee
+C***REFERENCES  JONES R.E., KAHANER D.K., "XERROR, THE SLATEC ERROR-
+C                 HANDLING PACKAGE", SAND82-0800, SANDIA LABORATORIES,
+C                 1982.
+C***ROUTINES CALLED  J4SAVE
+C***END PROLOGUE  XGETUA
+      DIMENSION IUNITA(5)
+C***FIRST EXECUTABLE STATEMENT  XGETUA
+      N = J4SAVE(5,0,.FALSE.)
+      DO 30 I=1,N
+         INDEX = I+4
+         IF (I.EQ.1) INDEX = 3
+         IUNITA(I) = J4SAVE(INDEX,0,.FALSE.)
+   30 CONTINUE
+      RETURN
+      END
+*DECK XGETUN
+      SUBROUTINE XGETUN(IUNIT)
+C***BEGIN PROLOGUE  XGETUN
+C***DATE WRITTEN   790801   (YYMMDD)
+C***REVISION DATE  820801   (YYMMDD)
+C***CATEGORY NO.  R3C
+C***KEYWORDS  ERROR,XERROR PACKAGE
+C***AUTHOR  JONES, R. E., (SNLA)
+C***PURPOSE  Returns the (first) output file to which messages are being
+C            sent.
+C***DESCRIPTION
+C     Abstract
+C        XGETUN gets the (first) output file to which error messages
+C        are being sent.  To find out if more than one file is being
+C        used, one must use the XGETUA routine.
+C
+C     Description of Parameter
+C      --Output--
+C        IUNIT - the logical unit number of the  (first) unit to
+C                which error messages are being sent.
+C                A value of zero means that the default file, as
+C                defined by the I1MACH routine, is being used.
+C
+C     Written by Ron Jones, with SLATEC Common Math Library Subcommittee
+C     Latest revision --- 23 May 1979
+C***REFERENCES  JONES R.E., KAHANER D.K., "XERROR, THE SLATEC ERROR-
+C                 HANDLING PACKAGE", SAND82-0800, SANDIA LABORATORIES,
+C                 1982.
+C***ROUTINES CALLED  J4SAVE
+C***END PROLOGUE  XGETUN
+C***FIRST EXECUTABLE STATEMENT  XGETUN
+      IUNIT = J4SAVE(3,0,.FALSE.)
+      RETURN
+      END
+*DECK XSETF
+      SUBROUTINE XSETF(KONTRL)
+C***BEGIN PROLOGUE  XSETF
+C***DATE WRITTEN   790801   (YYMMDD)
+C***REVISION DATE  820801   (YYMMDD)
+C***CATEGORY NO.  R3A
+C***KEYWORDS  ERROR,XERROR PACKAGE
+C***AUTHOR  JONES, R. E., (SNLA)
+C***PURPOSE  Sets the error control flag.
+C***DESCRIPTION
+C     Abstract
+C        XSETF sets the error control flag value to KONTRL.
+C        (KONTRL is an input parameter only.)
+C        The following table shows how each message is treated,
+C        depending on the values of KONTRL and LEVEL.  (See XERROR
+C        for description of LEVEL.)
+C
+C        If KONTRL is zero or negative, no information other than the
+C        message itself (including numeric values, if any) will be
+C        printed.  If KONTRL is positive, introductory messages,
+C        trace-backs, etc., will be printed in addition to the message.
+C
+C              IABS(KONTRL)
+C        LEVEL        0              1              2
+C        value
+C          2        fatal          fatal          fatal
+C
+C          1     not printed      printed         fatal
+C
+C          0     not printed      printed        printed
+C
+C         -1     not printed      printed        printed
+C                                  only           only
+C                                  once           once
+C
+C     Written by Ron Jones, with SLATEC Common Math Library Subcommittee
+C     Latest revision ---  19 MAR 1980
+C***REFERENCES  JONES R.E., KAHANER D.K., "XERROR, THE SLATEC ERROR-
+C                 HANDLING PACKAGE", SAND82-0800, SANDIA LABORATORIES,
+C                 1982.
+C***ROUTINES CALLED  J4SAVE,XERRWV
+C***END PROLOGUE  XSETF
+C***FIRST EXECUTABLE STATEMENT  XSETF
+      IF ((KONTRL.GE.(-2)).AND.(KONTRL.LE.2)) GO TO 10
+         CALL XERRWV('XSETF  -- INVALID VALUE OF KONTRL (I1).',33,1,2,
+     1  1,KONTRL,0,0,0.,0.)
+         RETURN
+   10 JUNK = J4SAVE(2,KONTRL,.TRUE.)
+      RETURN
+      END
+*DECK XSETUA
+      SUBROUTINE XSETUA(IUNITA,N)
+C***BEGIN PROLOGUE  XSETUA
+C***DATE WRITTEN   790801   (YYMMDD)
+C***REVISION DATE  820801   (YYMMDD)
+C***CATEGORY NO.  R3B
+C***KEYWORDS  ERROR,XERROR PACKAGE
+C***AUTHOR  JONES, R. E., (SNLA)
+C***PURPOSE  Sets up to 5 unit numbers to which messages are to be sent.
+C***DESCRIPTION
+C     Abstract
+C        XSETUA may be called to declare a list of up to five
+C        logical units, each of which is to receive a copy of
+C        each error message processed by this package.
+C        The purpose of XSETUA is to allow simultaneous printing
+C        of each error message on, say, a main output file,
+C        an interactive terminal, and other files such as graphics
+C        communication files.
+C
+C     Description of Parameters
+C      --Input--
+C        IUNIT - an array of up to five unit numbers.
+C                Normally these numbers should all be different
+C                (but duplicates are not prohibited.)
+C        N     - the number of unit numbers provided in IUNIT
+C                must have 1 .LE. N .LE. 5.
+C
+C     Written by Ron Jones, with SLATEC Common Math Library Subcommittee
+C     Latest revision ---  19 MAR 1980
+C***REFERENCES  JONES R.E., KAHANER D.K., "XERROR, THE SLATEC ERROR-
+C                 HANDLING PACKAGE", SAND82-0800, SANDIA LABORATORIES,
+C                 1982.
+C***ROUTINES CALLED  J4SAVE,XERRWV
+C***END PROLOGUE  XSETUA
+      DIMENSION IUNITA(5)
+C***FIRST EXECUTABLE STATEMENT  XSETUA
+      IF ((N.GE.1).AND.(N.LE.5)) GO TO 10
+         CALL XERRWV('XSETUA -- INVALID VALUE OF N (I1).',34,1,2,
+     1  1,N,0,0,0.,0.)
+         RETURN
+   10 CONTINUE
+      DO 20 I=1,N
+         INDEX = I+4
+         IF (I.EQ.1) INDEX = 3
+         JUNK = J4SAVE(INDEX,IUNITA(I),.TRUE.)
+   20 CONTINUE
+      JUNK = J4SAVE(5,N,.TRUE.)
+      RETURN
+      END
+*DECK XSETUN
+      SUBROUTINE XSETUN(IUNIT)
+C***BEGIN PROLOGUE  XSETUN
+C***DATE WRITTEN   790801   (YYMMDD)
+C***REVISION DATE  820801   (YYMMDD)
+C***CATEGORY NO.  R3B
+C***KEYWORDS  ERROR,XERROR PACKAGE
+C***AUTHOR  JONES, R. E., (SNLA)
+C***PURPOSE  Sets output file to which error messages are to be sent.
+C***DESCRIPTION
+C     Abstract
+C        XSETUN sets the output file to which error messages are to
+C        be sent.  Only one file will be used.  See XSETUA for
+C        how to declare more than one file.
+C
+C     Description of Parameter
+C      --Input--
+C        IUNIT - an input parameter giving the logical unit number
+C                to which error messages are to be sent.
+C
+C     Written by Ron Jones, with SLATEC Common Math Library Subcommittee
+C     Latest revision ---  7 June 1978
+C***REFERENCES  JONES R.E., KAHANER D.K., "XERROR, THE SLATEC ERROR-
+C                 HANDLING PACKAGE", SAND82-0800, SANDIA LABORATORIES,
+C                 1982.
+C***ROUTINES CALLED  J4SAVE
+C***END PROLOGUE  XSETUN
+C***FIRST EXECUTABLE STATEMENT  XSETUN
+      JUNK = J4SAVE(3,IUNIT,.TRUE.)
+      JUNK = J4SAVE(5,1,.TRUE.)
+      RETURN
+      END
