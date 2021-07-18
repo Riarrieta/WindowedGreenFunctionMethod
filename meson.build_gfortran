@@ -1,0 +1,56 @@
+project('project', 'fortran')
+  
+flags_compiler = [
+                  '-Wall',
+                  #'-g',
+                  '-Ofast',
+                  '-march=native'
+                 ]
+flags_linker = [
+                '-llapack',
+                '-lblas',
+                #'-pg'
+               ]
+mpifort = dependency('mpi', language: 'fortran')
+add_global_arguments(flags_compiler, language: 'fortran')
+add_global_link_arguments(flags_linker, language: 'fortran')
+
+sources = [
+        #   'src/BEMMaxwell/EFIE_functions.f90',
+        #   'src/BEMMaxwell/EFIEDuffy_functions.f90',
+           'src/BEMMaxwell/linalg.f90',
+        #   'src/BEMMaxwell/mainConvergenceEFIE.f90',
+        #   'src/BEMMaxwell/mainConvergenceMFIE.f90',
+           'src/BEMMaxwell/meshread.f90',
+           'src/BEMMaxwell/MFIEDuffy_functions.f90',
+           'src/BEMMaxwell/tools.f90',
+           'src/BEMMaxwell/zPackgmres.f',
+           'src/dipole_over_dielectric/dipole_mod.f90',
+           'src/dipole_over_dielectric/GF_LIB/GF_num_exb.f',
+           'src/SpherePEC/bessel_mod.f90',
+           'src/SpherePEC/data_tools.f90',
+           'src/SpherePEC/legendre_mod.f90',
+           'src/SpherePEC/pec_scattering.f90',
+           'src/SpherePEC/BESSEL_LIB/msphj.f90',
+           'src/SpherePEC/BESSEL_LIB/msphy.f90',
+           'src/SpherePEC/LEGENDRE_LIB/fcnpak.f',
+           'src/SpherePEC/spherePEC_mod.f90',
+           'src/WGFMethod/dipole_functions.f90',
+           'src/WGFMethod/planewave_sources.f90',
+           'src/WGFMethod/WGFM_matrices.f90',
+           'src/WGFMethod/WGFM_SauterSchwab.f90',
+           'src/WGFMethod/window_mod.f90',
+           'src/WGFMethod/currents_mod.f90',
+           'src/WGFMethod/WMFIE_matrices.f90',
+           #'test/test.f90',
+           #'script/WGFMethod/mainWMFIE_multi.f90',
+           #'script/WGFMethod/mainWMFIE.f90',
+           'script/WGFMethod/mainWGF.f90',
+           #'script/WGFMethod/mainWGF_load_error.f90',
+           #'script/WGFMethod/mainMieField.f90',
+           #'script/WGFMethod/mainWGF_eigenvalues.f90',
+          ]
+
+executable('executable',
+           sources,
+           dependencies : [mpifort])
