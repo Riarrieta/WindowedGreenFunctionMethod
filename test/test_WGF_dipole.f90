@@ -148,10 +148,9 @@ if (id == 0) then
     Error1 = maxval(sqrt(abs(ESol(:,1))**2+abs(ESol(:,2))**2+abs(ESol(:,3))**2))
 
     print *, 'nEdges ', 'h ',' Error WGFM: '
-    print *, msh%nbEdg, msh%h, Error1 / ExNorm
+    print *, msh%nbEdg, msh%h, Error1 / ExNorm  ! Error must be 4.467210077471702E-003
 
-    ! Save errors to evl mesh
-    !call saveToMesh(ESol/ExNorm, file_evl_msh, "error", 'nodes', 'norm')
+
 end if
 
 call MPI_Finalize(ierr)

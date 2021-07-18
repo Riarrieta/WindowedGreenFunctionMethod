@@ -22,15 +22,10 @@ add_global_link_arguments(flags_linker, language: 'fortran')
 mpi = dependency('mpi', language: 'fortran')
 
 sources = [
-        #   'src/BEMMaxwell/EFIE_functions.f90',
-        #   'src/BEMMaxwell/EFIEDuffy_functions.f90',
-           'src/BEMMaxwell/linalg.f90',
-        #   'src/BEMMaxwell/mainConvergenceEFIE.f90',
-        #   'src/BEMMaxwell/mainConvergenceMFIE.f90',
-           'src/BEMMaxwell/meshread.f90',
-           'src/BEMMaxwell/MFIEDuffy_functions.f90',
-           'src/BEMMaxwell/tools.f90',
-           'src/BEMMaxwell/zPackgmres.f',
+           'src/BEMExtra/linalg_mod.f90',
+           'src/BEMExtra/meshread_mod.f90',
+           'src/BEMExtra/tools.f90',
+           'src/BEMExtra/zPackgmres.f',
            'src/dipole_over_dielectric/dipole_mod.f90',
            'src/dipole_over_dielectric/GF_LIB/GF_num_exb.f',
            'src/SpherePEC/bessel_mod.f90',
