@@ -13,7 +13,8 @@ real(8), parameter :: pi = 4d0 * atan(1d0)
 complex(8), parameter :: IU = (0d0, 1d0)
 
 ! Variables
-type(Mesh) :: msh, msh_evl
+type(Mesh) :: msh
+real(8),parameter:: msh_evl(1,3) = [1d0, 0d0, 2d0]  ! Eval mesh
 
 complex(8), allocatable :: ZMat(:, :)  ! WGFM matrix
 
@@ -31,7 +32,6 @@ complex(8), allocatable :: ESol(:, :)      ! WGFM electric field solution
 complex(8), allocatable :: HSol(:, :)      ! WGFM magnetic field solution
 
 real(8) :: ExNorm, Error1
-integer :: nEvl
 
 ! MPI variables
 integer :: ierr, N_procs, id
@@ -54,9 +54,6 @@ real(8), parameter :: k2 = w * sqrt(ep2 * mu2)  ! lower half-space wavenumber [1
 
 character(len=150), parameter ::  &
     file_msh = '/home/rodrigo/Dropbox/Rodrigo-Carlos/Meshes/dipoleMeshes/planeA4h0312.msh'
-character(len=150), parameter ::  &
-    file_evl_msh = '/home/rodrigo/Dropbox/Rodrigo-Carlos/Meshes/dipoleMeshes/pillbox1.msh'
-!character(len=100), parameter :: file_save_data = 'results/data.txt'
 real(8), parameter :: win_radius = 4d0      ! Window radius
 real(8), parameter :: win_cparam = 0.7d0    ! Window 'c' parameter
 real(8), parameter :: gmres_tol = 1d-5      ! GMRES tolerance
@@ -79,10 +76,6 @@ call set_circ_window(win_radius, win_cparam)
 
 ! Load mesh
 call load_gmsh(file_msh, msh)
-
-! Load eval mesh
-call load_gmsh(file_evl_msh, msh_evl)
-nEvl = size(msh_evl%POS, 1)
 
 ! Compute WGFM matrix
 if (id == 0) print *, "WGFM matrix, ", 'nEdges: ', msh%nbEdg
@@ -108,20 +101,16 @@ if (id == 0) then
     Vvec = UVvec(msh%nbEdg+1 : 2*msh%nbEdg)
     deallocate(MJsrc, UVvec, ZMat)
     print *, "done"
-
-    ! Save currents data
-    !call save_msh_currents(file_save_data, msh, k1, k2, w,  &
-    !                       ep1_r, ep2_r, win_radius, Uvec, Vvec)
 end if
 
 ! Compute WGFM potencials
 if (id == 0) print *, "Potencial"
-call genWGFMPot(msh, msh_evl%POS, k1, k2, S1Pot, D1Pot, S2Pot, D2Pot)
+call genWGFMPot(msh, msh_evl, k1, k2, S1Pot, D1Pot, S2Pot, D2Pot)
 if (id == 0) print *, "done"
 
 ! Compute exact solution
 if (id == 0) print *, "Exact solution"
-call halfspace_dipole_field_mpi(msh_evl%POS, k0, k1, ep1_r, dcmplx(ep2_r),  &
+call halfspace_dipole_field_mpi(msh_evl, k0, k1, ep1_r, dcmplx(ep2_r),  &
                                 src, pol, Eexact, total_field)
 if (id == 0) then
     ExNorm = maxval(sqrt(abs(Eexact(:,1))**2+abs(Eexact(:,2))**2+abs(Eexact(:,3))**2))
@@ -131,7 +120,7 @@ endif
 ! Compute WGFM solution
 if (id == 0) then
     ! Free-space electric dipole field
-    call ElectricDipoleOnEvlMsh(pol, src, k1, w, mu1, msh_evl%POS, ESol, HSol)
+    call ElectricDipoleOnEvlMsh(pol, src, k1, w, mu1, msh_evl, ESol, HSol)
     deallocate(HSol)   ! HSol is not used
 
     ! Adjust constants
@@ -148,9 +137,7 @@ if (id == 0) then
     Error1 = maxval(sqrt(abs(ESol(:,1))**2+abs(ESol(:,2))**2+abs(ESol(:,3))**2))
 
     print *, 'nEdges ', 'h ',' Error WGFM: '
-    print *, msh%nbEdg, msh%h, Error1 / ExNorm  ! Error must be 4.467210077471702E-003
-
-
+    print *, msh%nbEdg, msh%h, Error1 / ExNorm  ! Error must be 2.756022600615578E-003
 end if
 
 call MPI_Finalize(ierr)
