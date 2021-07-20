@@ -133,9 +133,9 @@ contains
                 else if (cnt == 1) then
                     ! if shared vertex, compute EFIE with Sauter-Schwab
                     ! MFIE is also computed later
-                    call intSauterSchwabVertex_WGF(intg,k1,k2,pos,&
+                    call intSauterSchwabVertex_WGF(ssdata,intg,k1,k2,pos,&
                                                    q,q_src_nod,len_j,A_j,opp_nod_j,&
-                                                   p,p_src_nod,len_i,A_i,opp_nod_i,n_j, nSG)
+                                                   p,p_src_nod,len_i,A_i,opp_nod_i,n_j)
                     Z2_bff(:,edg_i,n_triangle) = Z2_bff(:,edg_i,n_triangle) + A_i*A_j*intg/pi  ! EFIE
                 end if
 
