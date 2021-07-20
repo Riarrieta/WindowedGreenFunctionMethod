@@ -2,14 +2,23 @@ module WGFM_SauterSchwabData
 use tools
 implicit none
 
+private
+
+! Constants
+integer,parameter:: NINTEGRALS_IDENTICAL = 6   ! number of integrals, identical case
+integer,parameter:: NINTEGRALS_EDGE = 5        ! number of integrals, edge case
+integer,parameter:: NINTEGRALS_VERTEX = 2      ! number of integrals, vertex case
+
 type SSDataArrays
     real(8),allocatable:: qweights(:,:,:,:)
-    real(8),allocatable:: qweights_aux(:,:,:,:)
     real(8),allocatable:: variables(:,:,:,:,:,:)
 end type 
 
 type SSDataType
-    integer:: nQ        ! number of quadrature points in 1D
+    integer:: nQ            ! number of quadrature points in 1D
+    integer:: n_identical   ! number of integrals, identical case
+    integer:: n_edge        ! number of integrals, edge case
+    integer:: n_vertex      ! number of integrals, vertex case
     type(SSDataArrays):: identical_data
     type(SSDataArrays):: edge_data
     type(SSDataArrays):: vertex_data
@@ -24,13 +33,15 @@ subroutine init_ssdata(ssdata, nQ)
     real(8):: gauss_qweight     ! holds the tensor gauss quadrature weight
     integer:: n1, n2, n3, i    ! loop indices
     
-    ! save number of quad. points
+    ! save number of quad. points and number of integrals
     ssdata%nQ = nQ  
+    ssdata%n_identical = NINTEGRALS_IDENTICAL
+    ssdata%n_edge = NINTEGRALS_EDGE
+    ssdata%n_vertex = NINTEGRALS_VERTEX
     ! obtain quadrature data and scale to the interval [0, 1]
     call gaussQuadrature(t,w,nQ)
     w = 0.5d0*w
     t = 0.5d0*(1.0d0+t)
-
     ! allocate data
     call allocate_ssdata(ssdata)
     ! compute qnodes and qweights
@@ -62,7 +73,8 @@ pure subroutine get_ss_identical_params(ssdata, x, y, qweight, n1, n2, n3, i, l,
     real(8),intent(out):: qweight                  ! quadrature weight and jacobian
     integer,intent(in):: n1, n2, n3, i, l          ! loop indices
     real(8),intent(in):: p1(3), p2(3), p3(3)       ! triangle  vertices
-    call get_ss_params(ssdata%identical_data, x, y, qweight, n1, n2, n3, i, l, p1, p2, p3, p1, p2, p3, .false.)
+    call get_ss_params(ssdata%identical_data, x, y, n1, n2, n3, i, l, p1, p2, p3, p1, p2, p3)
+    call get_ss_qweight(ssdata%identical_data, qweight, n1, n2, n3, i)
 end subroutine get_ss_identical_params
 
 pure subroutine get_ss_edge_params(ssdata, x, y, qweight, n1, n2, n3, i, l, q1, q2, q3, p1, p2, p3)
@@ -72,7 +84,12 @@ pure subroutine get_ss_edge_params(ssdata, x, y, qweight, n1, n2, n3, i, l, q1, 
     integer,intent(in):: n1, n2, n3, i, l         ! loop indices
     real(8),intent(in):: q1(3), q2(3), q3(3)      ! triangle 1 vertices
     real(8),intent(in):: p1(3), p2(3), p3(3)      ! triangle 2 vertices
-    call get_ss_params(ssdata%edge_data, x, y, qweight, n1, n2, n3, i, l, q1, q2, q3, p1, p2, p3, .true.)
+    call get_ss_params(ssdata%edge_data, x, y, n1, n2, n3, i, l, q1, q2, q3, p1, p2, p3)
+    if (l == 1) then
+        call get_ss_qweight(ssdata%edge_data, qweight, n1, n2, n3, i)  ! for integral 1
+    else
+        call get_ss_qweight(ssdata%identical_data, qweight, n1, n2, n3, i)  ! for integral 2,3,4,5
+    end if
 end subroutine get_ss_edge_params
 
 pure subroutine get_ss_vertex_params(ssdata, x, y, qweight, n1, n2, n3, i, l, q1, q2, q3, p1, p2, p3)
@@ -82,19 +99,17 @@ pure subroutine get_ss_vertex_params(ssdata, x, y, qweight, n1, n2, n3, i, l, q1
     integer,intent(in):: n1, n2, n3, i, l          ! loop indices
     real(8),intent(in):: q1(3), q2(3), q3(3)       ! triangle 1 vertices
     real(8),intent(in):: p1(3), p2(3), p3(3)       ! triangle 2 vertices
-    call get_ss_params(ssdata%vertex_data, x, y, qweight, n1, n2, n3, i, l, q1, q2, q3, p1, p2, p3, .false.)
+    call get_ss_params(ssdata%vertex_data, x, y, n1, n2, n3, i, l, q1, q2, q3, p1, p2, p3)
+    call get_ss_qweight(ssdata%vertex_data, qweight, n1, n2, n3, i)
 end subroutine get_ss_vertex_params
 
-pure subroutine get_ss_params(ssdata_a, x, y, qweight, n1, n2, n3, i, l, q1, q2, q3, p1, p2, p3, edge)
+pure subroutine get_ss_params(ssdata_a, x, y, n1, n2, n3, i, l, q1, q2, q3, p1, p2, p3)
     type(SSDataArrays),intent(in):: ssdata_a
     real(8),intent(out):: x(3), y(3)           ! points in triangles 1 and 2
-    real(8),intent(out):: qweight              ! quadrature weight and jacobian
     integer,intent(in):: n1, n2, n3, i, l      ! loop indices
     real(8),intent(in):: q1(3), q2(3), q3(3)   ! triangle 1 vertices
     real(8),intent(in):: p1(3), p2(3), p3(3)   ! triangle 2 vertices
-    logical,intent(in):: edge                  ! true in edge case, false in identical and vertex cases
     real(8):: uO, vO, uI, vI                   ! hypercube variables
-
     ! get hypercube variables
     uO = ssdata_a%variables(1, l, i, n3, n2, n1)
     vO = ssdata_a%variables(2, l, i, n3, n2, n1)
@@ -103,19 +118,15 @@ pure subroutine get_ss_params(ssdata_a, x, y, qweight, n1, n2, n3, i, l, q1, q2,
     ! map variables to the triangles
     x = triangle_parametrization(uO, vO, q1, q2, q3)
     y = triangle_parametrization(uI, vI, p1, p2, p3)
-    ! get qweight and jacobian
-    if (edge) then
-        ! edge case
-        if (l == 1) then
-            qweight = ssdata_a%qweights_aux(i, n3, n2, n1) ! for integral 1
-        else
-            qweight = ssdata_a%qweights(i, n3, n2, n1)  ! for integrals 2,3,4,5
-        end if
-    else
-        ! identical and vertex cases
-        qweight = ssdata_a%qweights(i, n3, n2, n1)
-    end if 
 end subroutine get_ss_params
+
+pure subroutine get_ss_qweight(ssdata_a, qweight, n1, n2, n3, i)
+    type(SSDataArrays),intent(in):: ssdata_a
+    real(8),intent(out):: qweight              ! quadrature weight and jacobian
+    integer,intent(in):: n1, n2, n3, i      ! loop indices
+    ! get qweight and jacobian
+    qweight = ssdata_a%qweights(i, n3, n2, n1)
+end subroutine get_ss_qweight
 
 pure function triangle_parametrization(u, v, p1, p2, p3) result(x)
     real(8),intent(in):: u, v                  ! parameters
@@ -131,14 +142,13 @@ subroutine allocate_ssdata(ssdata)
     nQ = ssdata%nQ
     ! allocate identical data
     allocate(ssdata%identical_data%qweights(nQ,nQ,nQ,nQ))
-    allocate(ssdata%identical_data%variables(4,6,nQ,nQ,nQ,nQ)) ! 4 variables, 6 integrals
+    allocate(ssdata%identical_data%variables(4,NINTEGRALS_IDENTICAL,nQ,nQ,nQ,nQ)) ! 4 variables, 6 integrals
     ! allocate edge data
-    allocate(ssdata%edge_data%qweights_aux(nQ,nQ,nQ,nQ))   ! for integral 1
-    allocate(ssdata%edge_data%qweights(nQ,nQ,nQ,nQ))       ! for integral 2,3,4,5
-    allocate(ssdata%edge_data%variables(4,5,nQ,nQ,nQ,nQ))  ! 4 variables, 5 integrals
+    allocate(ssdata%edge_data%qweights(nQ,nQ,nQ,nQ))    ! for integral 1; integrals 2,3,4,5,6 use qweights from the identical case
+    allocate(ssdata%edge_data%variables(4,NINTEGRALS_EDGE,nQ,nQ,nQ,nQ))  ! 4 variables, 5 integrals
     ! allocate vertex data
     allocate(ssdata%vertex_data%qweights(nQ,nQ,nQ,nQ))
-    allocate(ssdata%vertex_data%variables(4,2,nQ,nQ,nQ,nQ)) ! 4 variables, 2 integrals
+    allocate(ssdata%vertex_data%variables(4,NINTEGRALS_VERTEX,nQ,nQ,nQ,nQ)) ! 4 variables, 2 integrals
 
 end subroutine allocate_ssdata
 
@@ -244,9 +254,6 @@ subroutine store_ssdata_edge(ssdata_e, gauss_qweight, eta1, eta2, eta3, xi, n1, 
     ssdata_e%variables(:, l, i, n3, n2, n1) = [uO, vO, uI, vI]
     ! Quadrature weight and jacobian for integral 1
     qweight = xi**3*eta1**2*gauss_qweight
-    ssdata_e%qweights_aux(i, n3, n2, n1) = qweight
-    ! Quadrature weight and jacobian for integrals 2,3,4,5
-    qweight = xi**3*eta1**2*eta2*gauss_qweight
     ssdata_e%qweights(i, n3, n2, n1) = qweight
 end subroutine store_ssdata_edge
 

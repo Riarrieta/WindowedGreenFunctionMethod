@@ -1,6 +1,6 @@
 project('project', 
         'fortran',
-        default_options: ['warning_level=0',
+        default_options: ['warning_level=2',
                           'optimization=3',
                           'debug=false'
                           ])
@@ -10,11 +10,10 @@ flags_compiler = ['-parallel',
                   '-ipo',
                   #'-qopenmp',
                   '-xHost',
-                  '-mkl',
-                  #'-warn noexternal'
+                  '-mkl'
                   ]
 flags_linker = ['-mkl',
-                #'-qopt-matmul'
+                '-qopt-matmul'
                 ]
 add_global_arguments(flags_compiler, language: 'fortran')
 add_global_link_arguments(flags_linker, language: 'fortran')
