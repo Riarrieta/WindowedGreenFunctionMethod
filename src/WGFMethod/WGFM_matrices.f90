@@ -119,15 +119,15 @@ contains
                 if (cnt == 3) then
                     ! if same triangle, compute EFIE with Sauter-Schwab
                     ! MFIE is not computed
-                    call intSauterSchwabIdentical_WGF(ssdata, intg,k1,k2,p,p_src_nod,len_i,A_i,opp_nod_i,n_j)
+                    call intSauterSchwabIdentical_WGF(ssdata,intg,k1,k2,p,p_src_nod,len_i,A_i,opp_nod_i,n_j)
                     Z2_bff(:,edg_i,n_triangle) = Z2_bff(:,edg_i,n_triangle) + A_i*A_j*intg/pi  ! EFIE
 
                 else if (cnt == 2) then
                     ! if shared edge, compute EFIE with Sauter-Schwab
                     ! MFIE is also computed later
-                    call intSauterSchwabEdge_WGF(intg,k1,k2,pos,&
+                    call intSauterSchwabEdge_WGF(ssdata,intg,k1,k2,pos,&
                                                  q,q_src_nod,len_j,A_j,opp_nod_j,&
-                                                 p,p_src_nod,len_i,A_i,opp_nod_i, n_j, nSG)
+                                                 p,p_src_nod,len_i,A_i,opp_nod_i, n_j)
                     Z2_bff(:,edg_i,n_triangle) = Z2_bff(:,edg_i,n_triangle) + A_i*A_j*intg/pi  ! EFIE
 
                 else if (cnt == 1) then

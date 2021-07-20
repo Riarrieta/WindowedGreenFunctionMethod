@@ -67,35 +67,29 @@ subroutine intSauterSchwabIdentical_WGF(ssdata, intg, k1, k2, p, p_src, len_p, A
   end do
   end do
 end subroutine intSauterSchwabIdentical_WGF
-!******************************************************************************!
-subroutine intSauterSchwabEdge_WGF(intg, k1, k2, pos, &
+
+subroutine intSauterSchwabEdge_WGF(ssdata, intg, k1, k2, pos, &
                         q, q_src, len_q, A_q, opp_nod_q, &
-                        p, p_src, len_p, A_p, opp_nod_p, n_j, nQ)
+                        p, p_src, len_p, A_p, opp_nod_p, n_j)
+  type(SSDataType),intent(in):: ssdata    ! holds Sauter-Schwab quadrature data
   real(8),intent(in) :: q(3,3),p(3,3),q_src(3,3),p_src(3,3), k1, k2
   real(8),intent(in) :: A_q,A_p,len_q(3),len_p(3)
-  integer,intent(in) :: pos(3,2),opp_nod_q(3),opp_nod_p(3),nQ
+  integer,intent(in) :: pos(3,2),opp_nod_q(3),opp_nod_p(3)
   real(8), intent(in) :: n_j(3)  ! normal to element
   complex(8),intent(out) :: intg(3,3)
   real(8) :: fO(3),fI(3),dfI
-  real(8) :: x(3),y(3),x0(3),y0(3)
-  integer :: n1,n2,n3,i,j,n,m,l
-  real(8) :: eta1,eta2,eta3,xi,uO,vO,uI,vI
+  real(8) :: x(3),y(3),qweight
+  integer :: nQ,nL,n1,n2,n3,i,j,n,m,l
   integer :: nd_q(3),nd_p(3)
   complex(8) :: intgAux(3,3)
   real(8) :: qAux(3,3),pAux(3,3),q_srcAux(3,3),p_srcAux(3,3)
   real(8) :: len_qAux(3),len_pAux(3)
   integer :: opp_nod_qAux(3),opp_nod_pAux(3)
-  real(8) :: t(nq),w(nq)
-  real(8) :: R0, Rvec(3), R
+  real(8) :: Rvec(3), R
   real(8) :: fO_cross(3)
   complex(8) :: G1, G2, Gd1, Gd2, Ker1(3,3), Ker2(3,3)
 
   !-------------------------------------------------------------------------!
-  call gaussQuadrature(t,w,nQ)
-
-  w = 0.5d0*w
-  t = 0.5d0*(1.0d0+t)
-
   ! find the common edge first:
   nd_q(1:2) = pos(1:2,1)
   nd_p(1:2) = pos(1:2,2)
@@ -119,102 +113,54 @@ subroutine intSauterSchwabEdge_WGF(intg, k1, k2, pos, &
   len_qAux = len_q(nd_q)
 
   !---------------------------
-  intgAux = 0.0d0
+  nQ = ssdata%nQ       ! number of 1D quadrature points
+  nL = ssdata%n_edge   ! number of integrals to perform
+  intgAux = 0.0d0      ! integral value
 
-  do n1=1,nQ ! eta1
-      eta1 = t(n1)
-      do n2=1,nQ !eta2
-          eta2 = t(n2)
-          do n3=1,nQ !eta3
-              eta3 = t(n3)
-              do i=1,nQ ! xi
-                  xi = t(i)
-                  do l=1,5
-                  !----------------------------------------------------------
-                    if (l==1) then
-                      uO = 1.0d0
-                      vO = eta1*eta3
-                      uI = (1.0d0-eta1*eta2)
-                      vI = eta1*(1.0d0-eta2)
-                    elseif (l==2) then
-                      uO = 1.0d0
-                      vO = eta1
-                      uI = (1.0d0-eta1*eta2*eta3)
-                      vI = eta1*eta2*(1.0d0-eta3)
-                    elseif (l==3) then
-                      uO = (1.0d0-eta1*eta2)
-                      vO = eta1*(1.0d0-eta2)
-                      uI = 1.0d0
-                      vI = eta1*eta2*eta3
-                    elseif (l==4) then
-                      uO = (1.0d0-eta1*eta2*eta3)
-                      vO = eta1*eta2*(1.0d0-eta3)
-                      uI = 1.0d0
-                      vI = eta1
-                    elseif (l==5) then
-                      uO = (1.0d0-eta1*eta2*eta3)
-                      vO = eta1*(1.0d0-eta2*eta3)
-                      uI = 1.0d0
-                      vI = eta1*eta2
-                    endif
-
-                    x =  param(xi*uO,xi*vO,qAux(1,:),qAux(2,:),qAux(3,:))
-                    y =  param(xi*uI,xi*vI,pAux(1,:),pAux(2,:),pAux(3,:))
-                    Rvec = x - y
-
-                    x0 =  param(uO,vO,qAux(1,:),qAux(2,:),qAux(3,:))
-                    y0 =  param(uI,vI,pAux(1,:),pAux(2,:),pAux(3,:))
-
-                    do n=1,3
-
-                      fO = sign(1,opp_nod_qAux(n))*len_qAux(n)*(q_srcAux(n,:)-x)/(2.0d0*A_q)
-                      fO_cross = cross(fO, n_j)
-
-                      do m=1,3
-
-                        fI = sign(1,opp_nod_pAux(m))*len_pAux(m)*(p_srcAux(m,:)-y)/(2.0d0*A_p)
-                        dfI = -sign(1,opp_nod_pAux(m))*len_pAux(m)/A_p
-
-                        Ker1(n,m) = sum(fI*fO_cross)
-                        Ker2(n,m) = sum(Rvec*fO_cross)*dfI
-                      enddo
-
-                    enddo
-
-                    R0 = sqrt(sum((x0-y0)**2))
-                    R = sqrt(sum(Rvec**2))
-                    
-                    ! Windowed Green's function,
-                    ! doesn't include jacobian (xi**3)
-                    G1 = exp(iu*k1*R)/R0 * window(y)
-                    G2 = exp(iu*k2*R)/R0 * window(y)
-
-                    Gd1 = (iu*k1*xi-1d0/R0)*G1/R0  ! includes jacobian (xi**3)
-                    Gd2 = (iu*k2*xi-1d0/R0)*G2/R0  ! includes jacobian (xi**3)
-
-                    G1 = G1 * xi**2  ! includes jacobian
-                    G2 = G2 * xi**2  ! includes jacobian
-
-                    Ker1 = Ker1 * (G2*k2**2-G1*k1**2)
-                    Ker2 = Ker2 * (Gd2 - Gd1)
-
-                    if (l==1) then
-                      intgAux = intgAux + w(n1)*w(n2)*w(n3)*w(i)*eta1**2*(Ker1 + Ker2)
-                    else
-                      intgAux = intgAux + w(n1)*w(n2)*w(n3)*w(i)*eta1**2*eta2*(Ker1 + Ker2)
-                    endif
-                  enddo
-              enddo
-          enddo
+  do n1 = 1,nQ  ! eta1
+  do n2 = 1,nQ  ! eta2
+  do n3 = 1,nQ  ! eta3
+  do i = 1,nQ   ! xi
+  do l = 1,nL   ! for each integral
+    ! get parametrization (x, y) and quadrature weight (qweight)
+    call get_ss_edge_params(ssdata, x, y, qweight,  &
+                            n1,n2,n3,i,l,  &
+                            qAux(1,:),qAux(2,:),qAux(3,:),  &
+                            pAux(1,:),pAux(2,:),pAux(3,:))
+    Rvec = x - y
+    ! compute RWG functions
+    do n=1,3
+      fO = sign(1,opp_nod_qAux(n))*len_qAux(n)*(q_srcAux(n,:)-x)/(2.0d0*A_q)
+      fO_cross = cross(fO, n_j)
+      do m=1,3
+        fI = sign(1,opp_nod_pAux(m))*len_pAux(m)*(p_srcAux(m,:)-y)/(2.0d0*A_p)
+        dfI = -sign(1,opp_nod_pAux(m))*len_pAux(m)/A_p
+        Ker1(n,m) = sum(fI*fO_cross)
+        Ker2(n,m) = sum(Rvec*fO_cross)*dfI
       enddo
-  enddo
-
-  do i=1,3
-    do j=1,3
+    enddo
+    ! compute windowed Green function
+    R = sqrt(sum(Rvec**2))
+    G1 = exp(iu*k1*R)/R * window(y)
+    G2 = exp(iu*k2*R)/R * window(y)
+    ! derivative
+    Gd1 = (iu*k1-1d0/R)*G1/R  
+    Gd2 = (iu*k2-1d0/R)*G2/R  
+    ! add to result
+    Ker1 = Ker1 * (G2*k2**2-G1*k1**2)
+    Ker2 = Ker2 * (Gd2 - Gd1)
+    intgAux = intgAux + qweight*(Ker1 + Ker2)
+  end do
+  end do
+  end do
+  end do
+  end do
+  ! copy result to output
+  do j=1,3
+    do i=1,3
       intg(nd_q(i),nd_p(j)) = intgAux(i,j)
     enddo
   enddo
-
 end subroutine intSauterSchwabEdge_WGF
 
 subroutine intSauterSchwabVertex_WGF(intg, k1, k2, pos, &
