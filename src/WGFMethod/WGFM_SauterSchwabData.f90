@@ -3,6 +3,8 @@ use tools
 implicit none
 
 private
+public:: SSDataType, init_ssdata, get_ss_identical_params,  &
+         get_ss_edge_params, get_ss_vertex_params
 
 ! Constants
 integer,parameter:: NINTEGRALS_IDENTICAL = 6   ! number of integrals, identical case
@@ -284,8 +286,5 @@ subroutine store_ssdata_vertex(ssdata_v, gauss_qweight, eta1, eta2, eta3, xi, n1
     qweight = xi**3*eta2*gauss_qweight
     ssdata_v%qweights(i, n3, n2, n1) = qweight
 end subroutine store_ssdata_vertex
-
-
-
 
 end module WGFM_SauterSchwabData
