@@ -1,29 +1,20 @@
-module Data
-    implicit none
-
-    type SSData_Vertex
-        integer:: h
-    end type
-
-    type SSData
-        integer:: n
-        type(SSData_Vertex):: ssdat_v
-    end type 
-
-
-    
-    end module
 
 program test
-use Data
 implicit none
 
-type(SSData):: ssdat
+integer,parameter:: n = 5
+real(8):: vec(4)
 
-ssdat%ssdat_v%h = 123
-ssdat%n = -1231
-print*, "hola", ssdat%n, ssdat%ssdat_v%h
+call routine(n, vec)
+print*, "hola", vec
 
+contains
+subroutine routine(arg1, arg2)
+    integer,intent(in):: arg1
+    real(8),intent(out):: arg2(4)
+    print*, arg1
+    arg2(1:2) = [arg1, arg1]
+end subroutine routine
 
 end program
 
