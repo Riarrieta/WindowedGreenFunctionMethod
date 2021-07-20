@@ -14,112 +14,58 @@ real(8),parameter:: pi = 4d0 * atan(1d0)
 complex(8),parameter:: iu = (0.0d0, 1.0d0)
 
 contains
-subroutine intSauterSchwabIdentical_WGF(intg, k1, k2, p, p_src, len_p, A, opp_nod, n_j, nQ)
+subroutine intSauterSchwabIdentical_WGF(ssdata, intg, k1, k2, p, p_src, len_p, A, opp_nod, n_j)
+  type(SSDataType),intent(in):: ssdata    ! holds Sauter-Schwab quadrature data
   real(8),intent(in) :: k1, k2, p(3,3),p_src(3,3),len_p(3),A
-  integer,intent(in) :: opp_nod(3),nQ
+  integer,intent(in) :: opp_nod(3)
   real(8), intent(in) :: n_j(3)  ! normal to element
   complex(8),intent(out) :: intg(3,3)
-  real(8) :: t(nq),w(nq)
   real(8) :: fO(3),fI(3),dfI
-  real(8) :: x(3),y(3),x0(3),y0(3)
-  integer :: n1,n2,n3,i,n,m,l
-  real(8) :: eta1,eta2,eta3,xi,uO,vO,uI,vI
-  real(8) :: R0, Rvec(3), R
+  real(8) :: x(3),y(3),qweight
+  integer :: nQ,nL,n1,n2,n3,i,n,m,l
+  real(8) :: Rvec(3), R
   real(8) :: fO_cross(3)
   complex(8) :: G1, G2, Gd1, Gd2, Ker1(3,3), Ker2(3,3)
   ! !-------------------------------------------------------------------------!
+  nQ = ssdata%nQ            ! number of 1D quadrature points
+  nL = ssdata%n_identical   ! number of integrals to perform
+  intg = 0.0d0              ! integral value
 
-  call gaussQuadrature(t,w,nQ)
-
-  w = 0.5d0*w
-  t = 0.5d0*(1.0d0+t)
-
-  intg = 0.0d0
-
-  do n1=1,nQ ! eta1
-      eta1 = t(n1)
-      do n2=1,nQ !eta2
-          eta2 = t(n2)
-          do n3=1,nQ !eta3
-              eta3 = t(n3)
-              do i=1,nQ ! xi
-                  xi = t(i)
-                  do l=1,6
-                    if (l==1) then
-                      uO = 1.0d0
-                      vO = (1.0d0-eta1+eta1*eta2)
-                      uI = (1.0d0-eta1*eta2*eta3)
-                      vI = (1.0d0-eta1)
-                    elseif (l==2) then
-                      uO = (1.0d0-eta1*eta2*eta2)
-                      vO = (1.0d0-eta1)
-                      uI = 1.0d0
-                      vI = (1.0d0-eta1+eta1*eta2)
-                    elseif (l==3) then
-                      uO = 1.0d0
-                      vO = eta1*(1.0d0-eta2+eta2*eta3)
-                      uI = (1.0d0-eta1*eta2)
-                      vI = eta1*(1.0d0-eta2)
-                    elseif (l==4) then
-                      uO = (1.0d0-eta1*eta2)
-                      vO = eta1*(1.0d0-eta2)
-                      uI = 1.0d0
-                      vI = eta1*(1.0d0-eta2+eta2*eta3)
-                    elseif (l==5) then
-                      uO = (1.0d0-eta1*eta2*eta3)
-                      vO = eta1*(1.0d0-eta2*eta3)
-                      uI = 1.0d0
-                      vI = eta1*(1.0d0-eta2)
-                    elseif (l==6) then
-                      uO = 1.0d0
-                      vO = eta1*(1.0d0-eta2)
-                      uI = (1.0d0-eta1*eta2*eta3)
-                      vI = eta1*(1.0d0-eta2*eta3)
-                    endif
-
-                    x =  param(xi*uO,xi*vO,p(1,:),p(2,:),p(3,:))
-                    y =  param(xi*uI,xi*vI,p(1,:),p(2,:),p(3,:))
-                    Rvec = x - y
-
-                    x0 =  param(uO,vO,p(1,:),p(2,:),p(3,:))
-                    y0 =  param(uI,vI,p(1,:),p(2,:),p(3,:))
-
-                    do n=1,3
-                      fO = sign(1,opp_nod(n))*len_p(n)*(p_src(n,:)-x)/(2.0d0*A)
-                      fO_cross = cross(fO, n_j)
-                      do m=1,3
-                        fI = sign(1,opp_nod(m))*len_p(m)*(p_src(m,:)-y)/(2.0d0*A)
-                        dfI = -sign(1,opp_nod(m))*len_p(m)/A
-
-                        Ker1(n,m) = sum(fI*fO_cross)
-                        Ker2(n,m) = sum(Rvec*fO_cross)*dfI
-                      enddo
-                    enddo
-
-                    R0 = sqrt(sum((x0-y0)**2))
-                    R = sqrt(sum(Rvec**2))
-
-                    ! Windowed Green's functions,
-                    ! doesn't include jacobian (xi**3)
-                    G1 = exp(iu*k1*R)/R0 * window(y)
-                    G2 = exp(iu*k2*R)/R0 * window(y)
-
-                    Gd1 = (iu*k1*xi-1d0/R0)*G1/R0  ! includes jacobian (xi**3)
-                    Gd2 = (iu*k2*xi-1d0/R0)*G2/R0  ! includes jacobian (xi**3)
-
-                    G1 = G1 * xi**2  ! includes jacobian
-                    G2 = G2 * xi**2  ! includes jacobian
-
-                    Ker1 = Ker1 * (G2*k2**2-G1*k1**2)
-                    Ker2 = Ker2 * (Gd2 - Gd1)
-
-                    intg = intg + eta1**2*eta2*w(n1)*w(n2)*w(n3)*w(i)*(Ker1 + Ker2)
-                  enddo
-              enddo
-          enddo
+  do n1 = 1,nQ  ! eta1
+  do n2 = 1,nQ  ! eta2
+  do n3 = 1,nQ  ! eta3
+  do i = 1,nQ   ! xi
+  do l = 1,nL   ! for each integral
+    ! get parametrization (x, y) and quadrature weight (qweight)
+    call get_ss_identical_params(ssdata, x, y, qweight, n1,n2,n3,i,l,p(1,:),p(2,:),p(3,:))
+    Rvec = x - y
+    ! compute RWG functions
+    do n=1,3
+      fO = sign(1,opp_nod(n))*len_p(n)*(p_src(n,:)-x)/(2.0d0*A)
+      fO_cross = cross(fO, n_j)
+      do m=1,3
+        fI = sign(1,opp_nod(m))*len_p(m)*(p_src(m,:)-y)/(2.0d0*A)
+        dfI = -sign(1,opp_nod(m))*len_p(m)/A
+        Ker1(n,m) = sum(fI*fO_cross)
+        Ker2(n,m) = sum(Rvec*fO_cross)*dfI
       enddo
-  enddo
-  return
+    enddo
+    ! compute windowed Green function
+    R = sqrt(sum(Rvec**2))
+    G1 = exp(iu*k1*R)/R * window(y)
+    G2 = exp(iu*k2*R)/R * window(y)
+    ! derivative
+    Gd1 = (iu*k1-1d0/R)*G1/R  
+    Gd2 = (iu*k2-1d0/R)*G2/R  
+    ! add to result
+    Ker1 = Ker1 * (G2*k2**2-G1*k1**2)
+    Ker2 = Ker2 * (Gd2 - Gd1)
+    intg = intg + qweight*(Ker1 + Ker2)
+  end do
+  end do
+  end do
+  end do
+  end do
 end subroutine intSauterSchwabIdentical_WGF
 !******************************************************************************!
 subroutine intSauterSchwabEdge_WGF(intg, k1, k2, pos, &

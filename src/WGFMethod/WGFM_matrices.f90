@@ -61,6 +61,7 @@ contains
         real(8) :: window_data(nQ, msh%nbELm)   ! contains the window weights of all elements
         integer :: n1, n2, n3, n4
         integer :: n_triangle
+        type(SSDataType) :: ssdata    ! holds Sauter-Schwab quadrature data
 
         ! for parallelization
         call divide_work(start, finish, msh%nbELm)
@@ -75,7 +76,9 @@ contains
         Z3_bff = 0.0d0
         E_bff = 0.0d0
 
+        ! initialize quadratures
         call gaussQuadratureTriangles(V, wei, nQ)
+        call init_ssdata(ssdata, nQ)
 
         n_triangle = 0
         do j = start, finish ! loop over the elements
@@ -116,7 +119,7 @@ contains
                 if (cnt == 3) then
                     ! if same triangle, compute EFIE with Sauter-Schwab
                     ! MFIE is not computed
-                    call intSauterSchwabIdentical_WGF(intg,k1,k2,p,p_src_nod,len_i,A_i,opp_nod_i,n_j,nSG)
+                    call intSauterSchwabIdentical_WGF(ssdata, intg,k1,k2,p,p_src_nod,len_i,A_i,opp_nod_i,n_j)
                     Z2_bff(:,edg_i,n_triangle) = Z2_bff(:,edg_i,n_triangle) + A_i*A_j*intg/pi  ! EFIE
 
                 else if (cnt == 2) then
