@@ -7,12 +7,14 @@ project('project',
   
 flags_compiler = ['-parallel',
                   '-heap-arrays',
-                  '-ipo',
                   #'-qopenmp',
+                  '-ipo',
                   '-xHost',
                   '-mkl'
                   ]
 flags_linker = ['-mkl',
+                '-ipo',
+                '-xHost',
                 '-qopt-matmul'
                 ]
 add_global_arguments(flags_compiler, language: 'fortran')

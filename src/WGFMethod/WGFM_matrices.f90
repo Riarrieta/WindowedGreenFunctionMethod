@@ -78,7 +78,7 @@ contains
 
         ! initialize quadratures
         call gaussQuadratureTriangles(V, wei, nQ)
-        call init_ssdata(ssdata, nQ)
+        call init_ssdata(ssdata, nSG)
 
         n_triangle = 0
         do j = start, finish ! loop over the elements
