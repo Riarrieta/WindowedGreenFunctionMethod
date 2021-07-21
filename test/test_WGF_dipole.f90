@@ -138,7 +138,7 @@ if (id == 0) then
 
     print *, 'nEdges ', 'h ',' Error WGFM: '
     print *, msh%nbEdg, msh%h, Error1 / ExNorm  ! Error must be 2.756022600615578E-003
-    print *, "Error must be 2.756022600615578E-003"
+    print *, "Error must be close to 2.756022600615526E-003"
 end if
 
 call MPI_Finalize(ierr)

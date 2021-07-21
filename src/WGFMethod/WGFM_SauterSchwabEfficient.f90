@@ -36,7 +36,8 @@ subroutine intSauterSchwabIdentical_WGF(ssdata, intg, k1, k2, p, p_src, len_p, A
   do n3 = 1,nQ  ! eta3
   do i = 1,nQ   ! xi
   do l = 1,nL   ! for each integral
-    ! get parametrization (x, y) and quadrature weight (qweight)
+    ! get parametrization (x, y) and quadrature weight (qweight),
+    ! the jacobian is included in qweight
     call get_ss_identical_params(ssdata, x, y, qweight, n1,n2,n3,i,l,p(1,:),p(2,:),p(3,:))
     Rvec = x - y
     ! compute RWG functions
@@ -122,7 +123,8 @@ subroutine intSauterSchwabEdge_WGF(ssdata, intg, k1, k2, pos, &
   do n3 = 1,nQ  ! eta3
   do i = 1,nQ   ! xi
   do l = 1,nL   ! for each integral
-    ! get parametrization (x, y) and quadrature weight (qweight)
+    ! get parametrization (x, y) and quadrature weight (qweight),
+    ! the jacobian is included in qweight
     call get_ss_edge_params(ssdata, x, y, qweight,  &
                             n1,n2,n3,i,l,  &
                             qAux(1,:),qAux(2,:),qAux(3,:),  &
@@ -223,7 +225,8 @@ subroutine intSauterSchwabVertex_WGF(ssdata, intg, k1, k2, pos, &
   do n3 = 1,nQ  ! eta3
   do i = 1,nQ   ! xi
   do l = 1,nL   ! for each integral
-    ! get parametrization (x, y) and quadrature weight (qweight)
+    ! get parametrization (x, y) and quadrature weight (qweight),
+    ! the jacobian is included in qweight
     call get_ss_vertex_params(ssdata, x, y, qweight,  &
                             n1,n2,n3,i,l,  &
                             qAux(1,:),qAux(2,:),qAux(3,:),  &

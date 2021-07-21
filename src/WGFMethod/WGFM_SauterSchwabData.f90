@@ -12,21 +12,32 @@ integer,parameter:: NINTEGRALS_EDGE = 5        ! number of integrals, edge case
 integer,parameter:: NINTEGRALS_VERTEX = 2      ! number of integrals, vertex case
 
 type SSDataArrays
-    real(8),allocatable:: qweights(:,:,:,:)
-    real(8),allocatable:: variables(:,:,:,:,:,:)
+    ! qweights for each qpoint [n1, n2, n3, i] (jacobian included)  
+    real(8),allocatable:: qweights(:,:,:,:)       ! qweight = qweights(i, n3, n2, n1)
+    ! variables [uO, vO, uI, vI] for each qpoint `[n1, n2, n3, i]` and integral `l`
+    real(8),allocatable:: variables(:,:,:,:,:,:)  ! [uO, vO, uI, vI] = variables(:, l, i, n3, n2, n1)
 end type 
 
+! Data structure that contains the Sauter-Schwab quadrature data.
+! The quadrature points are indexed by 4 integers `[n1, n2, n3, i]`
+! with each integer belonging to {1,2,...,nQ}. They individually
+! represent qpoints in the hypercube coordinates (eta1, eta2, eta3, xi) \in [0,1]^4.
+! For each case (identical, common edge, common vertex) there are (6, 5, 2) 
+! integrals to compute, respectively. Each integral is indexed by the integer `l`
+! in {1,2,...,lMax}, with `lMax` depending on the case.
 type SSDataType
     integer:: nQ            ! number of quadrature points in 1D
-    integer:: n_identical   ! number of integrals, identical case
-    integer:: n_edge        ! number of integrals, edge case
-    integer:: n_vertex      ! number of integrals, vertex case
-    type(SSDataArrays):: identical_data
-    type(SSDataArrays):: edge_data
-    type(SSDataArrays):: vertex_data
-end type 
+    integer:: n_identical   ! number of integrals, identical case (6 integrals)
+    integer:: n_edge        ! number of integrals, edge case  (5 integrals)
+    integer:: n_vertex      ! number of integrals, vertex case  (2 integrals)
+    type(SSDataArrays):: identical_data    ! quadrature data for the identical case
+    type(SSDataArrays):: edge_data         ! quadrature data for the edge case
+    type(SSDataArrays):: vertex_data       ! quadrature data for the vertex case
+end type  
 
 contains
+! ********************* Public procedures ************************************************************
+! Initializes `ssdata` by generating the quadrature points and weights.
 subroutine init_ssdata(ssdata, nQ)
     type(SSDataType),intent(out):: ssdata
     integer,intent(in):: nQ    ! number of quadrature points in 1D
@@ -69,6 +80,9 @@ subroutine init_ssdata(ssdata, nQ)
     end do
 end subroutine init_ssdata
 
+! Gets the parametrization `(x,y)` and the quadrature weight `qweight` (jacobian included)
+! for the qnode `[n1, n2, n3, i]`, integral `l` and the triangle with vertices `[p1, p2, p3]`,
+! for the identical case.
 pure subroutine get_ss_identical_params(ssdata, x, y, qweight, n1, n2, n3, i, l, p1, p2, p3)
     type(SSDataType),intent(in):: ssdata
     real(8),intent(out):: x(3), y(3)               ! points in triangle
@@ -79,6 +93,9 @@ pure subroutine get_ss_identical_params(ssdata, x, y, qweight, n1, n2, n3, i, l,
     call get_ss_qweight(ssdata%identical_data, qweight, n1, n2, n3, i)
 end subroutine get_ss_identical_params
 
+! Gets the parametrization `(x,y)` and the quadrature weight `qweight`
+! for the qnode `[n1, n2, n3, i]`, integral `l` and the triangles with vertices `[q1, q2, q3]`
+! and `[p1, p2, p3]`, for the common edge case.
 pure subroutine get_ss_edge_params(ssdata, x, y, qweight, n1, n2, n3, i, l, q1, q2, q3, p1, p2, p3)
     type(SSDataType),intent(in):: ssdata
     real(8),intent(out):: x(3), y(3)              ! points in triangle
@@ -94,6 +111,9 @@ pure subroutine get_ss_edge_params(ssdata, x, y, qweight, n1, n2, n3, i, l, q1, 
     end if
 end subroutine get_ss_edge_params
 
+! Gets the parametrization `(x,y)` and the quadrature weight `qweight`
+! for the qnode `[n1, n2, n3, i]`, integral `l` and the triangles with vertices `[q1, q2, q3]`
+! and `[p1, p2, p3]`, for the common vertex case.
 pure subroutine get_ss_vertex_params(ssdata, x, y, qweight, n1, n2, n3, i, l, q1, q2, q3, p1, p2, p3)
     type(SSDataType),intent(in):: ssdata
     real(8),intent(out):: x(3), y(3)               ! points in triangle
@@ -105,6 +125,9 @@ pure subroutine get_ss_vertex_params(ssdata, x, y, qweight, n1, n2, n3, i, l, q1
     call get_ss_qweight(ssdata%vertex_data, qweight, n1, n2, n3, i)
 end subroutine get_ss_vertex_params
 
+! ********************* Private procedures ************************************************************
+! Gets the parametrization `(x,y)` for the qnode `[n1, n2, n3, i]`, integral `l` 
+! and the triangles with vertices `[q1, q2, q3]` and `[p1, p2, p3]`.
 pure subroutine get_ss_params(ssdata_a, x, y, n1, n2, n3, i, l, q1, q2, q3, p1, p2, p3)
     type(SSDataArrays),intent(in):: ssdata_a
     real(8),intent(out):: x(3), y(3)           ! points in triangles 1 and 2
@@ -122,6 +145,7 @@ pure subroutine get_ss_params(ssdata_a, x, y, n1, n2, n3, i, l, q1, q2, q3, p1, 
     y = triangle_parametrization(uI, vI, p1, p2, p3)
 end subroutine get_ss_params
 
+! Gets the the quadrature weight `qweight` for the qnode `[n1, n2, n3, i]`.
 pure subroutine get_ss_qweight(ssdata_a, qweight, n1, n2, n3, i)
     type(SSDataArrays),intent(in):: ssdata_a
     real(8),intent(out):: qweight              ! quadrature weight and jacobian
@@ -130,6 +154,8 @@ pure subroutine get_ss_qweight(ssdata_a, qweight, n1, n2, n3, i)
     qweight = ssdata_a%qweights(i, n3, n2, n1)
 end subroutine get_ss_qweight
 
+! Maps (u,v) in the reference triangle to the 3D triangle with vertices
+! `p1`, `p2` and `p3`.
 pure function triangle_parametrization(u, v, p1, p2, p3) result(x)
     real(8),intent(in):: u, v                  ! parameters
     real(8),intent(in):: p1(3), p2(3), p3(3)   ! triangle vertices
@@ -137,6 +163,7 @@ pure function triangle_parametrization(u, v, p1, p2, p3) result(x)
     x = p1 + u*(p2-p1) + v*(p3-p2)
 end function triangle_parametrization
 
+! Allocates the arrays for storing the quadrature data in `ssdata`.
 subroutine allocate_ssdata(ssdata)
     type(SSDataType),intent(inout):: ssdata
     integer:: nQ    ! number of quadrature points in 1D
@@ -154,6 +181,7 @@ subroutine allocate_ssdata(ssdata)
 
 end subroutine allocate_ssdata
 
+! Computes the quadrature data for the identical case
 subroutine store_ssdata_identical(ssdata_i, gauss_qweight, eta1, eta2, eta3, xi, n1, n2, n3, i)
     type(SSDataArrays),intent(inout):: ssdata_i
     real(8),intent(in):: gauss_qweight         ! tensor gauss quadrature weight
@@ -210,6 +238,7 @@ subroutine store_ssdata_identical(ssdata_i, gauss_qweight, eta1, eta2, eta3, xi,
     ssdata_i%qweights(i, n3, n2, n1) = qweight
 end subroutine store_ssdata_identical
 
+! Computes the quadrature data for the common edge case
 subroutine store_ssdata_edge(ssdata_e, gauss_qweight, eta1, eta2, eta3, xi, n1, n2, n3, i)
     type(SSDataArrays),intent(inout):: ssdata_e
     real(8),intent(in):: gauss_qweight         ! tensor gauss quadrature weight
@@ -259,6 +288,7 @@ subroutine store_ssdata_edge(ssdata_e, gauss_qweight, eta1, eta2, eta3, xi, n1, 
     ssdata_e%qweights(i, n3, n2, n1) = qweight
 end subroutine store_ssdata_edge
 
+! Computes the quadrature data for the common vertex case
 subroutine store_ssdata_vertex(ssdata_v, gauss_qweight, eta1, eta2, eta3, xi, n1, n2, n3, i)
     type(SSDataArrays),intent(inout):: ssdata_v
     real(8),intent(in):: gauss_qweight         ! tensor gauss quadrature weight
